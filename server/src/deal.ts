@@ -110,3 +110,21 @@ export function clueId(giver: string, round: number): Hex {
     )
   );
 }
+
+const MAX_ROUND_SKIP = 100;
+
+// The round counter starts over with the server; burners and their clues do not.
+// The contract takes one clue per (giver, round), so a round number is usable only
+// if none of these givers already has a clue under it.
+export async function nextFreeRound(
+  from: number,
+  givers: string[],
+  taken: (id: Hex) => Promise<boolean>
+): Promise<number> {
+  let round = from;
+  for (let skipped = 0; skipped < MAX_ROUND_SKIP; skipped++, round++) {
+    const used = await Promise.all(givers.map((g) => taken(clueId(g, round))));
+    if (!used.includes(true)) break;
+  }
+  return round;
+}

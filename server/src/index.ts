@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { encodeFunctionData, formatEther, getAddress, isAddress, parseEventLogs, type Address, type Hex } from 'viem';
 import { config } from './config.js';
 import { game, type SlotData } from './game.js';
-import { dealRound, clueId } from './deal.js';
+import { dealRound, clueId, nextFreeRound } from './deal.js';
 import { moderateClue } from './moderate.js';
 import { runBot, type BotResult } from './bots.js';
 import { initWs, onIdentify, broadcastToAll, broadcastToProjector, sendToPlayer } from './ws.js';
@@ -17,8 +17,8 @@ import {
   chhotaWallet,
   clueOnChain,
   contract,
-  getBotBalance,
   getFees,
+  getGameBalance,
   getTxCount,
   guessOnChain,
   operatorWallet,
@@ -98,11 +98,21 @@ onIdentify((ws, playerId) => {
 
 // --- Chain helpers ---
 
+// Each burner's nonce when this server first saw it. Above zero, the burner played
+// before a restart and may hold clues under round numbers this server would reuse.
+const firstNonce = new Map<Address, number>();
+// What such a burner already held in the contract, so its phone still shows its full balance.
+const heldBefore = new Map<string, bigint>();
+
 // What a phone needs to sign its own transactions. Null means it plays off chain.
 async function chainInfo(address: Address) {
   if (!chainEnabled) return null;
   try {
     const [fees, nonce] = await Promise.all([getFees(), getTxCount(address)]);
+    if (!firstNonce.has(address)) {
+      firstNonce.set(address, nonce);
+      if (nonce > 0) heldBefore.set(address, await getGameBalance(address).catch(() => 0n));
+    }
     return {
       id: config.chainId,
       contract,
@@ -191,8 +201,21 @@ app.get('/state', (_req, res) => {
   });
 });
 
-app.post('/start', (_req, res) => {
-  game.startRound();
+let starting = false;
+
+// A round number is skipped when a burner in the room already has a clue under it
+// on the contract; that clue would block the new one and every guess on it.
+app.post('/start', async (_req, res) => {
+  if (!starting && game.phase === 'LOBBY' && game.playerCount >= 3) {
+    starting = true;
+    try {
+      const back = [...game.players.keys()].filter((a) => (firstNonce.get(a as Address) ?? 0) > 0);
+      const next = game.round + 1;
+      game.startRound(back.length ? await nextFreeRound(next, back, clueOnChain) : next);
+    } finally {
+      starting = false;
+    }
+  }
   res.json({ ok: true, round: game.round });
 });
 
@@ -235,7 +258,7 @@ app.post('/clue/submit', async (req, res) => {
       const sent = await relay(check.serialized, playerId as Address, check.nonce);
       nonce = sent.nonce;
       // A relay that timed out may still have landed; the chain has the last word.
-      onChain = sent.landed || (await clueOnChain(id));
+      onChain = sent.landed || (await clueOnChain(id, deal.commit));
     } finally {
       pendingClues.delete(playerId);
     }
@@ -374,7 +397,7 @@ async function settleOnChain(items: SettleItem[]): Promise<SettleOutcome> {
 async function botPools(): Promise<number[] | null> {
   try {
     return await Promise.all(
-      BOTS.map(async (b) => Number(formatEther(b.address ? await getBotBalance(b.address) : 0n))),
+      BOTS.map(async (b) => Number(formatEther(b.address ? await getGameBalance(b.address) : 0n))),
     );
   } catch {
     return null;
@@ -425,7 +448,7 @@ async function settleRound(): Promise<void> {
     if (!player.ws) continue;
     sendToPlayer(player.ws, 'result', {
       payouts: payoutLines(payments, address, botName),
-      balance: formatEther(earned.get(address) ?? 0n),
+      balance: formatEther((heldBefore.get(address) ?? 0n) + (earned.get(address) ?? 0n)),
     });
   }
 }

@@ -246,11 +246,18 @@ export function getTxCount(address: Address): Promise<number> {
 }
 
 // After a relay that timed out or errored, the chain says whether it landed anyway.
-export async function clueOnChain(clueId: Hex): Promise<boolean> {
+// With `commit`, only that exact clue counts: the slot may hold one the same
+// burner posted under the same round number before a server restart.
+export async function clueOnChain(clueId: Hex, commit?: Hex): Promise<boolean> {
   if (!contract) return false;
   try {
-    const [giver] = await publicClient.readContract({ address: contract, abi, functionName: 'clues', args: [clueId] });
-    return BigInt(giver) !== 0n;
+    const [giver, , , , stored] = await publicClient.readContract({
+      address: contract,
+      abi,
+      functionName: 'clues',
+      args: [clueId],
+    });
+    return BigInt(giver) !== 0n && (commit === undefined || stored.toLowerCase() === commit.toLowerCase());
   } catch {
     return false;
   }
@@ -271,12 +278,13 @@ export async function guessOnChain(clueId: Hex, player: Address): Promise<number
   }
 }
 
-export async function getBotBalance(bot: Address): Promise<bigint> {
+// What the contract holds for a bot (its pool) or a player (winnings not yet withdrawn).
+export async function getGameBalance(holder: Address): Promise<bigint> {
   if (!contract) return 0n;
   return publicClient.readContract({
     address: contract,
     abi,
     functionName: 'balanceOf',
-    args: [bot],
+    args: [holder],
   }) as Promise<bigint>;
 }

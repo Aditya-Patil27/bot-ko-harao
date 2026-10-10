@@ -56,10 +56,10 @@ export class GameState extends EventEmitter {
     this.players.delete(address);
   }
 
-  startRound(): void {
+  startRound(round = this.round + 1): void {
     if (this.phase !== 'LOBBY') return;
     if (this.playerCount < 3) return;
-    this.round++;
+    this.round = round;
     this.clues = [];
     this.slots = [];
     this.setPhase('WRITE', config.writeS);
