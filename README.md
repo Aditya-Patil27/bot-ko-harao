@@ -23,6 +23,7 @@
 | **Play it** | Phones: [bot-ko-harao-production.up.railway.app](https://bot-ko-harao-production.up.railway.app). Big screen: [/screen](https://bot-ko-harao-production.up.railway.app/screen). A round needs 3 players, and **N** on the big screen starts it. |
 | **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified, exact match, on MonadVision (Monad's Sourcify). |
 | **A round on chain** | [Settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) of a test round on 10 October 2026. One transaction settled three clues and made 18 payouts. |
+| **A cash-out on chain** | [Transfer](https://testnet.monadvision.com/tx/0xb7c45a7f0945af422cc772b165d1bc0ccbd372d9efa95b7ce9e9609ae3a80f6d) from a test on the live site on 10 October 2026. A test browser cashed out 0.03 MON to one of the project's own wallets. |
 | **Demo video** | TODO |
 | **Product video** | [The ad on X](https://x.com/AdityaPati74270/status/2108882886258819075), 32 seconds. |
 | **Post** | [Build post on X](https://x.com/AdityaPati74270/status/2108824629116887407) |
@@ -577,7 +578,7 @@ Never commit `.env`. It holds private keys.
 - A move sent without a signed transaction is accepted on the player ID alone. Such a move can never pay out.
 - The round lives in the server's memory. A restart or a redeploy empties the room. There is no database.
 - There is no rate limit on the HTTP routes.
-- Cash-out has been tested end to end on a local chain only. No cash-out has landed on Monad testnet yet.
+- Cash-out has landed on Monad testnet once, in a test: a test browser's wallet sent 0.03 MON to one of the project's own wallets. Nobody has yet cashed out from their own phone to their own wallet.
 - A cash-out goes to whatever address is pasted. The phone checks only that it is an address and not the game contract. MON that was withdrawn but not yet sent on is remembered in that browser's local storage and nowhere else.
 - The cash-out button is on the result card only. A phone that reloads gets it back with the next round's result.
 - The contract has not been audited and runs on testnet only.
@@ -618,7 +619,7 @@ There is no CI. Run the tests before you push.
 | Settle and payouts on chain | Working. See the [settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) |
 | Two bots on live models | Working |
 | Phone app and big screen | Working |
-| Cash out to your own wallet | Built, and tested end to end on a local chain: `withdraw()`, then a transfer to the address the player pastes. Not yet run on Monad testnet |
+| Cash out to your own wallet | Working on Monad testnet: `withdraw()`, then a transfer to the address the player pastes. In a test on the live site, a test browser's wallet withdrew 0.03 MON and [sent it on](https://testnet.monadvision.com/tx/0xb7c45a7f0945af422cc772b165d1bc0ccbd372d9efa95b7ce9e9609ae3a80f6d) to one of the project's own wallets. Not yet done from a person's phone |
 | A cut of each sponsored pool | Planned, not in the contract |
 | Host login, saved rooms, mainnet | Not built |
 
@@ -658,7 +659,7 @@ Built at the event, 10 October 2026:
 - New players get gas on joining. The drip wallet funds burner wallets in batches through `dripMany`.
 - Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events. Each phone's balance and each bot's remaining pool are read from the contract too.
 - Played a full test round on testnet: three clues, twelve guesses, and one settle transaction that made 18 payouts.
-- Cash-out on the phone: a player signs `withdraw()` and a transfer, which move their winnings to their own wallet. Tested end to end on a local chain.
+- Cash-out on the phone: a player signs `withdraw()` and a transfer, which move their winnings to their own wallet. Run once on Monad testnet, in a test.
 - Gas limits measured under Monad pricing, plus 20%.
 - A deploy script, and one server process that serves the whole app, so one URL is enough. `npm run build` and `npm start` at the repo root are all a host needs.
 
