@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useState, type ButtonHTMLAttributes, type SubmitEvent, type ReactNode } from 'react';
-import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
+import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type SubmitEvent, type ReactNode } from 'react';
+import { encodeFunctionData, parseAbi, type Hex } from 'viem';
+import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import {
   Check,
   CheckCircle,
@@ -20,9 +21,26 @@ type Phase = 'LOBBY' | 'WRITE' | 'GUESS' | 'REVEAL';
 
 interface Deal {
   round: number;
+  group: number;
   options: string[];
   mine: number;
+  commit: Hex;
 }
+
+// Sent by the server on join when the game is on chain. `nonce` moves as this phone transacts.
+interface ChainConfig {
+  id: number;
+  contract: Hex;
+  gas: { postClue: string; guess: string };
+  maxFeePerGas: string;
+  maxPriorityFeePerGas: string;
+  nonce: number;
+}
+
+const GAME_ABI = parseAbi([
+  'function postClue(uint32 round, uint16 group, bytes32 commit, string text)',
+  'function guess(bytes32 clueId, uint8 choice)',
+]);
 
 interface Slot {
   round: number;
@@ -67,13 +85,13 @@ function save(key: string, value: string) {
 }
 
 // Burner wallet: created in the browser, never leaves it. The address is the player ID.
-function burnerAddress(): string {
+function burner(): PrivateKeyAccount {
   let key = load(KEY_SLOT);
   if (!key || !/^0x[0-9a-fA-F]{64}$/.test(key)) {
     key = generatePrivateKey();
     save(KEY_SLOT, key);
   }
-  return privateKeyToAccount(key as `0x${string}`).address;
+  return privateKeyToAccount(key as Hex);
 }
 
 async function postJson(path: string, body: unknown) {
@@ -84,6 +102,49 @@ async function postJson(path: string, body: unknown) {
   });
   const data = await res.json().catch(() => ({}));
   return { ok: res.ok, status: res.status, data };
+}
+
+function readChain(raw: any): ChainConfig | null {
+  if (!raw || typeof raw.contract !== 'string' || typeof raw.nonce !== 'number' || !raw.gas) return null;
+  return raw as ChainConfig;
+}
+
+// A zero-value call to the game contract, signed here. The server only relays it.
+function signCall(account: PrivateKeyAccount, chain: ChainConfig, gas: string, data: Hex) {
+  return account.signTransaction({
+    type: 'eip1559',
+    chainId: chain.id,
+    to: chain.contract,
+    data,
+    value: 0n,
+    gas: BigInt(gas),
+    nonce: chain.nonce,
+    maxFeePerGas: BigInt(chain.maxFeePerGas),
+    maxPriorityFeePerGas: BigInt(chain.maxPriorityFeePerGas),
+  });
+}
+
+// Posts a move with its signed transaction. A 502 means the transaction did not
+// land and carries the nonce to use: sign once more, then send the move unsigned
+// so it still counts for the round, without a payout.
+async function postMove(
+  path: string,
+  body: object,
+  chain: ChainConfig | null,
+  sign: ((chain: ChainConfig) => Promise<Hex>) | null,
+) {
+  for (let attempt = 0; chain && sign && attempt < 2; attempt++) {
+    let rawTx: Hex;
+    try {
+      rawTx = await sign(chain);
+    } catch {
+      break;
+    }
+    const res = await postJson(path, { ...body, rawTx });
+    if (typeof res.data.nonce === 'number') chain.nonce = res.data.nonce;
+    if (res.status !== 502) return res;
+  }
+  return postJson(path, body);
 }
 
 function countWords(text: string) {
@@ -104,11 +165,14 @@ function clueError(reason?: string) {
   if (opt) return `“${opt[1]}” is one of the four words. Describe it another way.`;
   if (reason === 'banned word') return "That word isn't allowed. Try another clue.";
   if (reason === 'not in write phase') return 'Time is up for this round.';
+  if (reason === 'already submitted') return 'Your clue for this round is already in.';
   return 'Could not send your clue. Try again.';
 }
 
 export function PhoneView() {
-  const [address] = useState(burnerAddress);
+  const [account] = useState(burner);
+  const address = account.address;
+  const chainRef = useRef<ChainConfig | null>(null);
   const [name, setName] = useState(() => load(NAME_SLOT) ?? '');
   const [playerId, setPlayerId] = useState('');
   const [joining, setJoining] = useState(false);
@@ -147,7 +211,7 @@ export function PhoneView() {
         }
         break;
       case 'deal':
-        setDeal({ round: data.round, options: data.options, mine: data.mine });
+        setDeal({ round: data.round, group: data.group, options: data.options, mine: data.mine, commit: data.commit });
         break;
       case 'slot':
         setSlot(data);
@@ -191,6 +255,7 @@ export function PhoneView() {
           const finalName = data.name ?? wanted;
           setName(finalName);
           save(NAME_SLOT, finalName);
+          chainRef.current = readChain(data.chain);
           setPlayerId(data.playerId);
         } else {
           setJoinErr(joinError(data.error));
@@ -228,7 +293,21 @@ export function PhoneView() {
     setSending(true);
     setClueErr('');
     try {
-      const { ok, data } = await postJson('/clue/submit', { playerId, text });
+      const sign =
+        deal && deal.commit
+          ? (chain: ChainConfig) =>
+              signCall(
+                account,
+                chain,
+                chain.gas.postClue,
+                encodeFunctionData({
+                  abi: GAME_ABI,
+                  functionName: 'postClue',
+                  args: [deal.round, deal.group, deal.commit, text],
+                }),
+              )
+          : null;
+      const { ok, data } = await postMove('/clue/submit', { playerId, text }, chainRef.current, sign);
       if (ok) setLockedClue(text);
       else setClueErr(clueError(data.error));
     } catch {
@@ -243,8 +322,16 @@ export function PhoneView() {
     setPick(choice);
     setGuessErr('');
     navigator.vibrate?.(12);
+    const clueId = slot.clueId as Hex;
+    const sign = (chain: ChainConfig) =>
+      signCall(
+        account,
+        chain,
+        chain.gas.guess,
+        encodeFunctionData({ abi: GAME_ABI, functionName: 'guess', args: [clueId, choice] }),
+      );
     try {
-      const { ok, status, data } = await postJson('/guess', { playerId, clueId: slot.clueId, choice });
+      const { ok, status, data } = await postMove('/guess', { playerId, clueId, choice }, chainRef.current, sign);
       if (!ok && status !== 409) {
         setPick(null);
         setGuessErr(data.error === 'not in guess phase' ? 'Too late for this one.' : "That didn't land. Tap again.");

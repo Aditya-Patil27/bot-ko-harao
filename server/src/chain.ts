@@ -1,4 +1,5 @@
 import {
+  BaseError,
   createPublicClient,
   createWalletClient,
   http,
@@ -6,12 +7,13 @@ import {
   parseEther,
   type Hex,
   type Address,
+  type TransactionReceipt,
 } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { monadTestnet } from 'viem/chains';
 import { config } from './config.js';
 
-const abi = parseAbi([
+export const abi = parseAbi([
   'function postClue(uint32 round, uint16 group, bytes32 commit, string text)',
   'function guess(bytes32 clueId, uint8 choice)',
   'function settle((bytes32 clueId, uint8 answer, bytes32 salt, address[] winners)[] items)',
@@ -19,6 +21,8 @@ const abi = parseAbi([
   'function dripMany(address[] to, uint256 each) payable',
   'function withdraw()',
   'function balanceOf(address) view returns (uint256)',
+  'function clues(bytes32) view returns (address giver, uint32 round, uint16 group, bool settled, bytes32 commit)',
+  'function guessOf(bytes32, address) view returns (uint256)',
   'event ClueGiven(bytes32 indexed clueId, address indexed giver, uint32 round, uint16 group, string text)',
   'event Guessed(bytes32 indexed clueId, address indexed player, uint8 choice, uint64 blockNo)',
   'event Settled(bytes32 indexed clueId, uint8 answer, uint8 humansRight, uint8 botsRightMask)',
@@ -65,6 +69,18 @@ export function resetNonce(addr: Address): void {
 }
 
 export const contract = config.contractAddress;
+// Without a contract address the game runs off chain: same rounds, no payouts.
+export const chainEnabled = Boolean(contract);
+
+// Limits come from `forge test --gas-report` under Monad pricing (MonadNine, the
+// costlier fork) plus 20%. Monad bills the limit, not the gas used.
+const withMargin = (gas: bigint): bigint => (gas * 12n + 9n) / 10n;
+const GUESS_GAS = withMargin(62_061n);
+// Phones sign their own clue and guess, so they need the limits too.
+export const PHONE_GAS = { postClue: withMargin(84_930n), guess: GUESS_GAS };
+// dripMany to fresh addresses measures base + perAddress * n.
+const DRIP_BASE_GAS = 22_514;
+const DRIP_PER_ADDRESS_GAS = 42_656;
 
 export async function sendGuess(
   wallet: ReturnType<typeof makeWallet>,
@@ -79,7 +95,7 @@ export async function sendGuess(
       abi,
       functionName: 'guess',
       args: [clueId, choice],
-      gas: 60_077n,
+      gas: GUESS_GAS,
       nonce,
     });
     bumpNonce(wallet.account.address);
@@ -96,18 +112,27 @@ export async function sendSettle(
 ): Promise<Hex | null> {
   if (!operatorWallet || !contract) return null;
   try {
+    const args = [items.map((i) => ({
+      clueId: i.clueId,
+      answer: i.answer,
+      salt: i.salt,
+      winners: i.winners,
+    }))] as const;
+    // Cost depends on winners and payouts per clue, so it is measured per call.
+    const estimate = await publicClient.estimateContractGas({
+      address: contract,
+      abi,
+      functionName: 'settle',
+      args,
+      account: operatorWallet.account,
+    });
     const nonce = await getNonce(operatorWallet.account.address);
     const hash = await operatorWallet.writeContract({
       address: contract,
       abi,
       functionName: 'settle',
-      args: [items.map((i) => ({
-        clueId: i.clueId,
-        answer: i.answer,
-        salt: i.salt,
-        winners: i.winners,
-      }))],
-      gas: 200_000n,
+      args,
+      gas: withMargin(estimate),
       nonce,
     });
     bumpNonce(operatorWallet.account.address);
@@ -134,7 +159,7 @@ export async function sendDripMany(
       functionName: 'dripMany',
       args: [addresses, each],
       value: total,
-      gas: BigInt(50_000 + 35_000 * addresses.length),
+      gas: withMargin(BigInt(DRIP_BASE_GAS + DRIP_PER_ADDRESS_GAS * addresses.length)),
       nonce,
     });
     bumpNonce(dripWallet.account.address);
@@ -142,6 +167,106 @@ export async function sendDripMany(
   } catch (e) {
     console.error(`[chain] dripMany failed:`, e);
     resetNonce(dripWallet.account.address);
+    return null;
+  }
+}
+
+export interface Landed {
+  ok: boolean;
+  block: number;
+  hash: Hex;
+}
+
+const RELAY_TIMEOUT_MS = 8000;
+let syncSend = true;
+
+// -32601 method not found, -32004 method not supported.
+function methodMissing(e: unknown): boolean {
+  return e instanceof BaseError && e.walk((x) => [-32601, -32004].includes((x as { code?: number }).code ?? 0)) !== null;
+}
+
+// Relays a phone-signed transaction and waits for its receipt. Monad answers a
+// sync send with the receipt; a node without that method gets send-then-wait.
+export async function relayRaw(serialized: Hex): Promise<Landed> {
+  let receipt: TransactionReceipt | undefined;
+  if (syncSend) {
+    try {
+      receipt = await publicClient.sendRawTransactionSync({
+        serializedTransaction: serialized as `0x02${string}`,
+        throwOnReceiptRevert: false,
+        timeout: RELAY_TIMEOUT_MS,
+      });
+    } catch (e) {
+      if (!methodMissing(e)) throw e;
+      syncSend = false;
+    }
+  }
+  if (!receipt) {
+    const hash = await publicClient.sendRawTransaction({ serializedTransaction: serialized });
+    receipt = await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 250, timeout: RELAY_TIMEOUT_MS });
+  }
+  return { ok: receipt.status === 'success', block: Number(receipt.blockNumber), hash: receipt.transactionHash };
+}
+
+// For the operator and drip wallets, whose sends return a hash straight away.
+export async function waitLanded(hash: Hex): Promise<TransactionReceipt | null> {
+  try {
+    return await publicClient.waitForTransactionReceipt({ hash, pollingInterval: 300, timeout: 20_000 });
+  } catch (e) {
+    console.error(`[chain] no receipt for ${hash}:`, e);
+    return null;
+  }
+}
+
+export interface Fees {
+  maxFeePerGas: bigint;
+  maxPriorityFeePerGas: bigint;
+}
+
+const FEE_TTL_MS = 15_000;
+let fees: { at: number; value: Promise<Fees> } | null = null;
+
+// Monad charges base fee plus tip on the gas limit, so a 2x cap on the base fee
+// costs nothing extra and survives a busy block.
+export function getFees(): Promise<Fees> {
+  if (!fees || Date.now() - fees.at > FEE_TTL_MS) {
+    const value = Promise.all([publicClient.getBlock(), publicClient.estimateMaxPriorityFeePerGas()]).then(
+      ([block, tip]) => ({ maxFeePerGas: (block.baseFeePerGas ?? 0n) * 2n + tip, maxPriorityFeePerGas: tip }),
+    );
+    value.catch(() => {
+      fees = null;
+    });
+    fees = { at: Date.now(), value };
+  }
+  return fees.value;
+}
+
+export function getTxCount(address: Address): Promise<number> {
+  return publicClient.getTransactionCount({ address });
+}
+
+// After a relay that timed out or errored, the chain says whether it landed anyway.
+export async function clueOnChain(clueId: Hex): Promise<boolean> {
+  if (!contract) return false;
+  try {
+    const [giver] = await publicClient.readContract({ address: contract, abi, functionName: 'clues', args: [clueId] });
+    return BigInt(giver) !== 0n;
+  } catch {
+    return false;
+  }
+}
+
+export async function guessOnChain(clueId: Hex, player: Address): Promise<number | null> {
+  if (!contract) return null;
+  try {
+    const packed = await publicClient.readContract({
+      address: contract,
+      abi,
+      functionName: 'guessOf',
+      args: [clueId, player],
+    });
+    return packed === 0n ? null : Number(packed & 0xffn) - 1;
+  } catch {
     return null;
   }
 }

@@ -85,10 +85,15 @@ async function callLLM(
 
 async function submitGuesses(
   botCfg: BotConfig,
-  answers: BotAnswer[]
+  answers: BotAnswer[],
+  slot: SlotData
 ): Promise<void> {
+  // A guess on a clue that is not on chain, or a second guess on the same clue,
+  // reverts and still costs gas. Each open clue takes one guess.
+  const open = new Set(slot.clues.filter((c) => c.onChain).map((c) => c.clueId));
   for (const a of answers) {
-    if (a.choice < 0 || a.choice > 3) continue;
+    if (!Number.isInteger(a.choice) || a.choice < 0 || a.choice > 3) continue;
+    if (!open.delete(a.id)) continue;
     await sendGuess(botCfg.wallet, a.id as Hex, a.choice);
   }
 }
@@ -113,7 +118,7 @@ export async function runBot(
     `[bot:${botCfg.name}] ${answers.length}/${slot.clues.length} answers in ${thinkMs}ms`
   );
 
-  await submitGuesses(botCfg, answers);
+  await submitGuesses(botCfg, answers, slot);
   return { name: botCfg.name, answers, thinkMs };
 }
 

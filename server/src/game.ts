@@ -20,6 +20,8 @@ export interface ClueEntry {
   salt: string;
   commit: string;
   options: string[];
+  // True once the giver's postClue transaction landed; only then can it be guessed and settled on chain.
+  onChain?: boolean;
 }
 
 export interface SlotData {

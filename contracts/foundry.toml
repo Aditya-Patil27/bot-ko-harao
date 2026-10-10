@@ -3,6 +3,8 @@ solc_version = "0.8.28"
 src = "src"
 out = "out"
 libs = ["lib"]
+network = "monad"
+use_literal_content = true
 
 [etherscan]
 monad = { key = "", url = "https://sourcify.blockvision.org/server" }
