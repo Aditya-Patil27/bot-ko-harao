@@ -22,7 +22,7 @@ AI is good at word games, but it is not perfect. In our bench run the small bot 
 
 1. **Join.** Scan the QR code on the big screen. The phone creates a burner wallet in the browser and its address becomes the player ID. The game sends that wallet a little MON for gas. No app and no sign-up.
 2. **Write (30 s).** Each player sees four words, one of which is theirs, and writes a clue for it. A clue is at most 6 words and 40 characters and cannot contain any of the four words.
-3. **Guess (4 slots of 8 s).** Each phone gets someone else's clue and its four words. The two bots get the same clues.
+3. **Guess (up to 4 slots of 8 s).** Each phone gets someone else's clue and its four words. The two bots get the same clues.
 4. **Reveal (15 s).** The answers come out and the winnings are settled.
 
 The bots are Chhota (`openai/gpt-oss-20b`) and Bada (`openai/gpt-oss-120b`), both on Groq's free tier. Any OpenAI-compatible endpoint works. A bot that times out or errors counts as having given no answer.
@@ -94,11 +94,11 @@ One process serves the phone app, the big screen and the API.
 - A round needs at least 3 players. The burner wallet lives in the browser's local storage, so each player needs their own device or browser profile.
 - Press **N** on the big screen to start the round.
 
-With the example file as it is, the game runs off chain: the same rounds, with no payouts.
+With the example file as it is, the game runs off chain: the same rounds, with no payouts. The bots have no key yet, so they give no answer and every clue the room gets right counts as beating them. Until step 2 the server log shows an `Invalid API Key` line for each bot call.
 
 **2. Turn on the bots**
 
-Put a free Groq key (console.groq.com) in `BOT_CHHOTA_API_KEY` and `BOT_BADA_API_KEY` in `server/.env`, then restart. Without a key the bots give no answer.
+Put a free Groq key (console.groq.com) in `BOT_CHHOTA_API_KEY` and `BOT_BADA_API_KEY` in `server/.env`, then restart.
 
 **3. Play for MON on testnet**
 
