@@ -4,6 +4,7 @@ import {
   Check,
   HandTap,
   Lightning,
+  Lock,
   Question,
   Robot,
   Trophy,
@@ -615,22 +616,26 @@ function BotCard({
             Waiting for your clues
           </p>
         ) : status ? (
+          // An answer is not a right answer: no score and no win colour before the results.
           <p
             className={`animate-pop rounded-[0.5em] border-[3px] border-ink px-[0.6em] py-[0.4em] text-[clamp(1.2rem,1.8cqw,2.2rem)] leading-tight font-extrabold ${
-              silent ? 'bg-sun' : 'bg-win'
+              silent ? 'bg-sun' : 'bg-paper'
             }`}
           >
             {silent ? (
               'No answer. Counts as wrong.'
             ) : (
               <>
-                Guessed{' '}
-                <span className="font-mono tabular-nums">
-                  {status.answeredCount}/{clueCount}
+                <span className="flex items-center gap-[0.35em]">
+                  <Lock weight="fill" className="shrink-0" aria-hidden />
+                  {status.answeredCount < clueCount
+                    ? `Locked ${status.answeredCount} of ${clueCount} guesses`
+                    : 'Guesses locked'}
                 </span>
                 <span className="block font-mono text-[0.7em] font-bold tabular-nums">
                   in {status.thinkMs.toLocaleString('en-US')} ms
                 </span>
+                <span className="mt-[0.3em] block text-[0.7em] font-bold">Right or wrong? See the results.</span>
               </>
             )}
           </p>
