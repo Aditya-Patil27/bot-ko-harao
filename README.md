@@ -2,11 +2,13 @@
 
 **A room full of phones against two AI bots. Beat a bot, and a contract on Monad pays you from its prize pool.**
 
-TODO: screenshot of the big screen in the middle of a round
+![The big screen while the room and the two bots are guessing](docs/big-screen-guess.png)
+
+*The big screen in a test round. The players and their clues in this picture are scripted. The two bots are the real models.*
 
 | | |
 |---|---|
-| **Play it** | TODO: hosted URL |
+| **Play it** | Phones: [bot-ko-harao-production.up.railway.app](https://bot-ko-harao-production.up.railway.app). Big screen: [/screen](https://bot-ko-harao-production.up.railway.app/screen). A round needs 3 players, and **N** on the big screen starts it. |
 | **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified, exact match, on MonadVision (Monad's Sourcify). |
 | **A round on chain** | [Settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) of a test round on 10 October 2026. One transaction settled three clues and made 18 payouts. |
 | **Demo video** | TODO |
@@ -68,11 +70,11 @@ R and G are fixed when the contract is deployed. On the live contract R is 0.005
 
 ## Who pays
 
-- A sponsor puts a prize into a bot's pool with `fund(bot)`. The contract holds it.
+- A sponsor puts up the prize for beating a bot, with `fund(bot)`.
 - The pool pays out only when a person in the room beats that bot.
-- Nobody has to trust the host. Payout sizes are fixed at deploy, and the operator can only submit a result that the contract checks.
+- The host cannot pick the winners. Payout sizes are fixed at deploy, and the operator can only submit a result that the contract checks.
 - Planned, not in the contract yet: a cut of each sponsored pool. The first customers are event organisers and sponsors who already hand out prizes by hand.
-- After events: AI companies already pay people who find where their models fail. Anthropic, for example, [pays for jailbreaks of its models](https://www.anthropic.com/news/model-safety-bug-bounty) through HackerOne. This contract is the same deal in small. The money is locked first and moves only when a human provably beats the model. It fits any test where the right answer can be committed before anyone plays.
+- After events: AI companies already pay people who find where their models fail. Anthropic, for example, [pays for jailbreaks of its models](https://www.anthropic.com/news/model-safety-bug-bounty) through HackerOne. This contract is the same deal in small. The prize is put up first and paid only when a human provably beats the model. It fits any test where the right answer can be committed before anyone plays.
 
 ## Run it yourself
 
@@ -119,7 +121,7 @@ Put the printed address in `CONTRACT_ADDRESS` and restart the server. Settling i
 **Tests**
 
 ```bash
-cd server && npm test          # 22 tests
+cd server && npm test          # 26 tests
 cd contracts && forge test     # 24 tests
 ```
 
