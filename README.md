@@ -51,7 +51,7 @@ Each phone signs its own transactions with its burner wallet. The server forward
 - **`guess`** records the choice and the block number, once per player per clue. Nobody can guess their own clue.
 - **`settle`** (operator only) reveals the answer and salt. The contract rejects the call if they do not match the commitment, or if any listed winner did not actually guess right.
 - Each human who was right takes **R** from each bot they beat. A bot is beaten if it was wrong, did not answer, or answered in a later block. A tie in the same block goes to the human.
-- If at least one human was right, the clue's writer takes **G** from each bot that was wrong.
+- If at least one human was right, the clue's writer takes **G** from each bot that was wrong or did not answer.
 - **`fund(bot)`** adds MON to a bot's prize pool. Anyone can call it.
 - **`withdraw`** pays a player their winnings. Bots cannot withdraw. The phone app shows winnings but has no withdraw button yet.
 - **`dripMany`** forwards the caller's own MON to a list of addresses, so burner wallets have gas.
@@ -74,21 +74,16 @@ R and G are fixed when the contract is deployed. A bot pays only what is left in
 
 ## Run it yourself
 
-You need Node 22 and npm. Foundry is only needed for the contract.
+You need Node 22 and npm. Foundry is only needed for the contract, and we use the Monad build (`foundryup --network monad`).
 
 **1. Start the game**
 
 ```bash
 git clone --recurse-submodules https://github.com/Aditya-Patil27/bot-ko-harao.git
 cd bot-ko-harao
-
-cd web
-npm ci
-npm run build
-cd ../server
-npm ci
-cp ../.env.example .env        # Windows: copy ..\.env.example .env
-npm start                      # http://localhost:3001
+npm run build                   # installs and builds web/ and server/
+cp .env.example server/.env     # Windows: copy .env.example server\.env
+npm start                       # http://localhost:3001
 ```
 
 One process serves the phone app, the big screen and the API.
@@ -156,9 +151,9 @@ Built at the event, 10 October 2026:
 - Deployed the contract again at the event and verified the source on Sourcify.
 - Phones sign their own `postClue` and `guess` transactions with the burner wallet. The server checks each one and relays it.
 - New players get gas on joining. The drip wallet funds burner wallets in batches through `dripMany`.
-- Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events.
+- Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events. Each phone's balance and each bot's remaining pool are read from the contract too.
 - Gas limits measured under Monad pricing, plus 20%.
-- A deploy script, and one server process that serves the whole app, so one URL is enough.
+- A deploy script, and one server process that serves the whole app, so one URL is enough. `npm run build` and `npm start` at the repo root are all a host needs.
 
 ## Layout
 
