@@ -49,7 +49,7 @@ flowchart LR
 | **Problem** | AI is good at word games but not perfect. A prize for out-thinking a model is usually handed out by a host. Here it is locked in a contract and paid by the contract's rules. |
 | **Input** | A player name, a clue of at most 6 words, and guesses (one of four words). Each move is a transaction signed on the phone. |
 | **Processing** | One server runs the round timer, checks clues and signed transactions, relays them to Monad, asks two models for their guesses, and proposes the result. The contract checks that result. |
-| **Output** | MON paid from each beaten bot's pool, a reveal with a leaderboard on the big screen, and each phone's own winnings. |
+| **Output** | MON paid from each beaten bot's pool, a reveal with a leaderboard on the big screen, and each phone's own winnings, which the player can cash out to their own wallet. |
 | **Runtime** | One Node 22 process: HTTP routes, a WebSocket, and the built web app. |
 | **Storage** | The contract on Monad testnet, the server's memory for the round in play, and the phone's local storage for its wallet key. There is no database. |
 | **Integrations** | A Monad RPC endpoint and an OpenAI-compatible chat API for each bot (Groq's free tier by default). |
@@ -89,6 +89,8 @@ The bots are Chhota (`openai/gpt-oss-20b`) and Bada (`openai/gpt-oss-120b`), bot
 
 In each slot a phone gets one clue. It is never the player's own clue and never one from the player's own group of four words.
 
+Winnings stay in the contract under the phone's burner wallet. After a round, **Cash out to my wallet** on the result card moves them to an address the player pastes. See [Cash out](#6-cash-out).
+
 ## Architecture
 
 ```mermaid
@@ -108,7 +110,7 @@ flowchart TB
         LLM["Model API<br/>OpenAI-compatible"]
         CON["BotKoHarao contract<br/>on Monad testnet"]
     end
-    PH -- "join, clue, guess<br/>signed on the phone" --> API
+    PH -- "join, clue, guess, cash-out<br/>signed on the phone" --> API
     SC -- "start the round" --> API
     GAME -. "phase, deal, slot, result" .-> PH
     GAME -. "players, clues, guesses,<br/>bots, reveal" .-> SC
@@ -128,9 +130,9 @@ Phones never talk to the RPC, so a full room is one connection to the chain and 
 
 | Part | Runs in | Job | Code |
 |---|---|---|---|
-| Phone app | The player's browser | Makes the burner wallet, signs `postClue` and `guess`, shows the round | [PhoneView.tsx](web/src/views/PhoneView.tsx) |
+| Phone app | The player's browser | Makes the burner wallet, signs `postClue`, `guess` and the cash-out, shows the round | [PhoneView.tsx](web/src/views/PhoneView.tsx) |
 | Big screen | The host's browser, at `/screen` | QR code, timer, live clues and guesses, the bots, the reveal. **N** starts a round | [ProjectorView.tsx](web/src/views/ProjectorView.tsx) |
-| HTTP routes | Server | Join, clue, guess and start, then settle and reveal | [index.ts](server/src/index.ts) |
+| HTTP routes | Server | Join, clue, guess, start and cash-out, then settle and reveal | [index.ts](server/src/index.ts) |
 | Round timer | Server | The four phases and the guess slots | [game.ts](server/src/game.ts) |
 | WebSocket hub | Server | Pushes every change to the phones and the big screen | [ws.ts](server/src/ws.ts) |
 | Deal | Server | Four words, a secret answer, a salt and a commitment for each player | [deal.ts](server/src/deal.ts) |
@@ -151,6 +153,7 @@ flowchart LR
         s3["Phone: choice and a signed guess"]
         s4["Server: the clues in a guess slot"]
         s5["Server: answer, salt and winners per clue"]
+        s6["Phone: a signed withdraw and a signed transfer"]
     end
     subgraph P["Pipeline"]
         p1["Pipeline 1<br/>Join and gas drip"]
@@ -158,6 +161,7 @@ flowchart LR
         p3["Pipeline 3<br/>Guess check and relay"]
         p4["Pipeline 4<br/>Bot guess"]
         p5["Pipeline 5<br/>Settle and reveal"]
+        p6["Pipeline 6<br/>Cash out"]
     end
     subgraph D["Destination"]
         d1["The burner wallet holds MON for gas"]
@@ -165,12 +169,14 @@ flowchart LR
         d3["A choice and a block number in the contract"]
         d4["The bot's choice in the contract"]
         d5["Balances in the contract,<br/>the reveal on every screen"]
+        d6["The winnings in the wallet the player chose"]
     end
     s1 --> p1 --> d1
     s2 --> p2 --> d2
     s3 --> p3 --> d3
     s4 --> p4 --> d4
     s5 --> p5 --> d5
+    s6 --> p6 --> d6
 ```
 
 | # | Pipeline | Trigger | Input | Destination |
@@ -180,6 +186,7 @@ flowchart LR
 | 3 | Human guess | A player taps a word during Guess | JSON: choice and a signed `guess` | The choice and its block number in the contract |
 | 4 | Bot guess | A guess slot opens | The slot's clues, each with its four words | The model API, then the bot's `guess` in the contract |
 | 5 | Settle and reveal | The last guess slot ends | Answer, salt and winners for each clue | Balances in the contract, the reveal on the big screen, a result on each phone |
+| 6 | Cash out | A player with winnings taps Cash out after a round | JSON: a signed `withdraw` and a signed transfer | The winnings in the wallet the player chose |
 
 **What is kept where**
 
@@ -188,7 +195,7 @@ flowchart LR
 | The contract | Each clue's giver, round, word group, commitment and settled flag. Each guess with its block number. Every bot's pool and every player's winnings. | Permanent |
 | Contract events | The clue text (`ClueGiven`), each guess (`Guessed`), the revealed answer (`Settled`), every payout (`Paid`), every top-up (`Funded`) | Permanent |
 | Server memory | The players, this round's words, answers and salts, the clues, the guesses, the bots' answers, winnings since the server started, the gas drip queue | Until the server restarts |
-| The phone's local storage | The burner wallet's private key and the player's name | Until the browser's storage is cleared |
+| The phone's local storage | The burner wallet's private key, the player's name, the address last cashed out to, and any MON withdrawn but not yet sent on | Until the browser's storage is cleared |
 | Sent on, not kept | Signed transactions, WebSocket messages, the prompt sent to the model API | Not kept |
 
 ## Pipelines step by step
@@ -292,6 +299,24 @@ flowchart TD
 
 **If it fails.** A batch that does not go through is retried clue by clue, so one bad item cannot hold back everyone else's payout. A clue that still fails is tried once more with the next round. With no contract set, the reveal still goes out and nothing is paid.
 
+### 6. Cash out
+
+The contract pays a player's winnings to the wallet that earned them, which is the phone's burner. Cashing out is therefore two transactions, both signed on the phone: `withdraw()` on the contract, then a plain transfer from the burner to the address the player pastes. The server relays them and never holds the money.
+
+| Stage | Component | Responsibility | Input → Output | Code |
+|---|---|---|---|---|
+| 1 | Phone app | Shows **Cash out to my wallet** on the result card when the balance is above zero, and takes a wallet address | Address pasted by the player → `POST /cashout/quote` | [PhoneView.tsx](web/src/views/PhoneView.tsx) |
+| 2 | `POST /cashout/quote` | Reads what the contract holds for that burner, the current fees and the nonce | `playerId` → `held` and `chain` | [index.ts](server/src/index.ts) |
+| 3 | Phone app | Signs `withdraw()` if the contract holds anything, then a transfer of the whole amount to the pasted address, with the next nonce | → `POST /cashout` with `withdrawTx` and `sendTx` | [PhoneView.tsx](web/src/views/PhoneView.tsx) |
+| 4 | Transaction check | `withdraw`: the same rules as a move. Transfer: EIP-1559, the right chain, no call data, a value above zero, a gas limit of at most 21,000, signed by that player. Both are checked before either is sent | Two raw transactions → ok or a reason | [relay.ts](server/src/relay.ts) |
+| 5 | Relay | Sends `withdraw` and waits for it to land, waits 2 s, then sends the transfer | → two receipts | [index.ts](server/src/index.ts), [chain.ts](server/src/chain.ts) |
+| 6 | Contract | Pays the burner everything it has won | `withdraw()` → MON in the burner wallet | [BotKoHarao.sol](contracts/src/BotKoHarao.sol) |
+| 7 | Reply | Says what landed, with the transfer's hash, block and explorer link | → "Sent … MON to your wallet" on the phone | [index.ts](server/src/index.ts) |
+
+The gas limits are 60,333 for `withdraw` (estimated at 50,277 on testnet, plus 20%) and 21,000 for the transfer, which is what a plain transfer between wallets costs. The burner pays both from the gas it was sent when it joined.
+
+**If it fails.** A cash-out is refused during Write and Guess, because the round's moves need the burner's nonce to themselves, and a second cash-out from the same player is refused while one is running. If `withdraw` gets no receipt, the server reads the contract, and a balance that is now zero counts as landed. If `withdraw` lands and the transfer does not, the phone remembers the amount and the next tap sends the transfer alone.
+
 ## What happens on chain
 
 ```mermaid
@@ -310,7 +335,7 @@ sequenceDiagram
 
 The server proposes a result and the contract checks it. The server never chooses who gets paid or how much.
 
-Each phone signs its own transactions with its burner wallet. The server forwards a transaction only if it is exactly the call the game expects from that player: the right signer, the right contract, the right data, no value, and a gas limit no higher than the measured one. It cannot change a signed transaction.
+Each phone signs its own transactions with its burner wallet. The server forwards a transaction only if it is exactly the call the game expects from that player: the right signer, the right contract, the right data, no value, and a gas limit no higher than the measured one. The one other thing it forwards is the second half of a cash-out: a plain transfer of the player's own MON, with no call data, from the burner to the wallet the player chose. It cannot change a signed transaction.
 
 | Function | Who can call it | What it does | Reverts with |
 |---|---|---|---|
@@ -318,7 +343,7 @@ Each phone signs its own transactions with its burner wallet. The server forward
 | `guess` | Any wallet but the clue's writer | Records the choice and the block number, once per player per clue. | `NO_CLUE`, `SETTLED`, `OWN_CLUE`, `BAD_CHOICE`, `DUPE_GUESS` |
 | `settle` | The operator | Reveals the answer and salt. The contract rejects the call if they do not match the commitment, or if any listed winner did not actually guess right. | `NOT_OP`, `NO_CLUE`, `SETTLED`, `BAD_COMMIT`, `UNSORTED`, `GIVER_WIN`, `BOT_WIN`, `NOT_WINNER` |
 | `fund(bot)` | Anyone | Adds MON to a bot's prize pool. | `NOT_BOT` |
-| `withdraw` | Any player | Pays a player their winnings. Bots cannot withdraw. The phone app shows winnings but has no withdraw button yet. | `BOT_NO_WD`, `NO_BAL`, `WD_FAIL` |
+| `withdraw` | Any player | Pays the caller everything they have won. Bots cannot withdraw. The phone's cash-out signs this call, then sends the MON on to the wallet the player chose. | `BOT_NO_WD`, `NO_BAL`, `WD_FAIL` |
 | `dripMany` | Anyone | Forwards the caller's own MON to a list of addresses, so burner wallets have gas. | `LOW_VALUE`, `DRIP_FAIL` |
 
 **The payout rules**
@@ -368,7 +393,7 @@ bot-ko-harao/
 │   └── lib/forge-std/            git submodule
 ├── server/                       the game server
 │   ├── src/
-│   │   ├── index.ts              HTTP routes, round wiring, settle and reveal
+│   │   ├── index.ts              HTTP routes, round wiring, cash-out, settle and reveal
 │   │   ├── game.ts               the round timer and its phases
 │   │   ├── ws.ts                 WebSocket hub
 │   │   ├── deal.ts               words, salts, commitments, clue IDs
@@ -451,7 +476,7 @@ Put the printed address in `CONTRACT_ADDRESS` and restart the server. Settling i
 **Tests**
 
 ```bash
-cd server && npm test          # 29 tests
+cd server && npm test          # 32 tests
 cd contracts && forge test     # 24 tests
 ```
 
@@ -466,7 +491,7 @@ All server settings are read from `server/.env`. The full list with comments is 
 | `MONAD_RPC_HTTP` | Monad RPC endpoint | To play on chain | `https://testnet-rpc.monad.xyz` |
 | `CHAIN_ID` | Chain ID | No, default 10143 | `10143` |
 | `CONTRACT_ADDRESS` | The deployed `BotKoHarao` contract. Empty means the game runs off chain | To play on chain | `0x...` |
-| `EXPLORER_TX_URL` | The explorer address a settle transaction's hash is added to, for the link on the results. Empty means no link | No, default MonadVision | `https://testnet.monadvision.com/tx/` |
+| `EXPLORER_TX_URL` | The explorer address a transaction's hash is added to, for the links on the results and after a cash-out. Empty means no link | No, default MonadVision | `https://testnet.monadvision.com/tx/` |
 | `OPERATOR_PK` | Deploys the contract and settles rounds | To play on chain | `0x...` |
 | `DRIP_PK` | Sends gas to burner wallets | To play on chain | `0x...` |
 | `BOT_CHHOTA_PK`, `BOT_BADA_PK` | The two bots' wallets | To play on chain | `0x...` |
@@ -503,10 +528,12 @@ Never commit `.env`. It holds private keys.
 | `POST /start` | Big screen | none | `ok`, `round`. A round starts only from the lobby with 3 or more players | none |
 | `POST /clue/submit` | Phone | `playerId`, `text`, `rawTx` (optional) | `ok`, `clueId`, `onChain`, `nonce` | 400 with the reason. 409 `already submitted`. 502 `tx failed` with the `nonce` to use |
 | `POST /guess` | Phone | `playerId`, `clueId`, `choice` (0 to 3), `rawTx` (optional) | `ok`, `nonce`, and `ms` and `block` when the transaction landed | 400 with the reason. 409 `already guessed`. 502 `tx failed` with the `nonce` to use |
+| `POST /cashout/quote` | Phone | `playerId` | `held` (the player's winnings in the contract, in wei) and `chain` | 400 `unknown player`, `off chain`. 502 `chain unavailable` |
+| `POST /cashout` | Phone | `playerId`, `withdrawTx`, `sendTx`. Either transaction can be left out, not both | `ok`, `withdrawn`, `sent`, `nonce`, and once the transfer has landed its `tx`, `block` and `txUrl` | 400 `unknown player`, `off chain`, `round running`, `nothing to send`, or the reason a transaction was refused. 409 `already cashing out`. 502 `tx failed` with the `nonce` to use |
 | `POST /clue/check` | Nothing in the web app | `text`, `options` | `ok`, and a `reason` if the clue breaks a rule | 400 |
 | `GET /screen` | Browser | none | The big-screen page | none |
 
-`chain` is what a phone needs to sign: `id`, `contract`, `gas` (`postClue`, `guess`), `maxFeePerGas`, `maxPriorityFeePerGas` and `nonce`. It is `null` when the game runs off chain.
+`chain` is what a phone needs to sign: `id`, `contract`, `gas` (`postClue`, `guess`, `withdraw`, `send`), `maxFeePerGas`, `maxPriorityFeePerGas` and `nonce`. It is `null` when the game runs off chain.
 
 **WebSocket.** Connect to `/ws?role=phone` or `/ws?role=projector`. A phone sends one message, `{ "type": "identify", "playerId": "0x..." }`, so the server knows which socket is whose. Everything else flows from the server.
 
@@ -532,13 +559,14 @@ Never commit `.env`. It holds private keys.
 | Concern | What the code does | Code |
 |---|---|---|
 | Who gets paid | The contract checks the commitment and every winner. The server cannot name a winner who did not guess right on chain | [BotKoHarao.sol](contracts/src/BotKoHarao.sol) |
-| Relayed transactions | Only the exact call the game expects, signed by that player's own wallet, is sent on | [relay.ts](server/src/relay.ts) |
+| Relayed transactions | Only the exact call the game expects, signed by that player's own wallet, is sent on. A cash-out's transfer must carry no call data | [relay.ts](server/src/relay.ts) |
 | Input | A 4 kB body cap, name and address checks, the clue rules and a banned-word list | [index.ts](server/src/index.ts), [moderate.ts](server/src/moderate.ts) |
-| Gas | Limits are the measured cost plus 20%. `settle` is estimated for every call | [chain.ts](server/src/chain.ts) |
+| Gas | Limits are the measured cost plus 20%. `settle` is estimated for every call. A plain transfer is 21,000 exactly | [chain.ts](server/src/chain.ts) |
 | A slow or failing bot | Timeouts of 4 s and 8 s. A bot that fails gives no answer and the round goes on | [bots.ts](server/src/bots.ts) |
 | A lost receipt | The server reads the contract to see whether the move landed | [index.ts](server/src/index.ts) |
 | A failed settle | Retried clue by clue, then once more with the next round | [index.ts](server/src/index.ts) |
 | Gas drip | Up to 3 tries per wallet. A wallet that already holds half a drip is not paid twice | [drip.ts](server/src/drip.ts) |
+| Cash-out | Both transactions are signed on the phone, so the server never holds a player's winnings. A transfer that did not land is sent again on the next tap | [index.ts](server/src/index.ts), [PhoneView.tsx](web/src/views/PhoneView.tsx) |
 | A dropped phone | The socket reconnects after 1 s, and during Write the phone gets its words again | [useWs.ts](web/src/hooks/useWs.ts), [index.ts](server/src/index.ts) |
 | A server restart | A returning wallet keeps its balance on screen, and round numbers it already used on chain are skipped | [index.ts](server/src/index.ts), [deal.ts](server/src/deal.ts) |
 | Secrets | Keys live in `server/.env`, which git ignores. A burner key never leaves its phone | [.gitignore](.gitignore) |
@@ -549,6 +577,9 @@ Never commit `.env`. It holds private keys.
 - A move sent without a signed transaction is accepted on the player ID alone. Such a move can never pay out.
 - The round lives in the server's memory. A restart or a redeploy empties the room. There is no database.
 - There is no rate limit on the HTTP routes.
+- Cash-out has been tested end to end on a local chain only. No cash-out has landed on Monad testnet yet.
+- A cash-out goes to whatever address is pasted. The phone checks only that it is an address and not the game contract. MON that was withdrawn but not yet sent on is remembered in that browser's local storage and nowhere else.
+- The cash-out button is on the result card only. A phone that reloads gets it back with the next round's result.
 - The contract has not been audited and runs on testnet only.
 - The burner key sits unencrypted in the browser's local storage. That is fine for testnet gas and not for real funds.
 - Logs go to the console and there are no metrics. `GET /state` is the only way to ask the server how it is.
@@ -569,7 +600,7 @@ Never commit `.env`. It holds private keys.
 | Server with reload | `npm run dev:server` | `tsx watch`, on port 3001 |
 | Web with hot reload | `npm run dev:web` | Vite. It passes the API routes and `/ws` on to `localhost:3001` |
 | Install and build | `npm run build` | Installs `web/` and `server/` and builds the web app |
-| Server tests | `cd server && npm test` | Vitest, 29 tests: the deal, the guess slots, the clue rules, the transaction rules, settlement |
+| Server tests | `cd server && npm test` | Vitest, 32 tests: the deal, the guess slots, the clue rules, the transaction rules, settlement |
 | Contract tests | `cd contracts && forge test` | 24 tests |
 | Gas report | `cd contracts && forge test --gas-report` | Where the gas limits in [chain.ts](server/src/chain.ts) come from |
 | All tests | `npm test` | Runs both. Needs `forge` on your PATH |
@@ -587,7 +618,7 @@ There is no CI. Run the tests before you push.
 | Settle and payouts on chain | Working. See the [settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) |
 | Two bots on live models | Working |
 | Phone app and big screen | Working |
-| Withdraw button on the phone | Not built yet. `withdraw()` is in the contract |
+| Cash out to your own wallet | Built, and tested end to end on a local chain: `withdraw()`, then a transfer to the address the player pastes. Not yet run on Monad testnet |
 | A cut of each sponsored pool | Planned, not in the contract |
 | Host login, saved rooms, mainnet | Not built |
 
@@ -610,6 +641,7 @@ There is no CI. Run the tests before you push.
 | Phones cannot open the QR address | The big screen was opened on `localhost` | Open the big screen with your computer's IP address, or set `PUBLIC_URL` |
 | Two tabs play as the same person | Tabs in one browser share one burner wallet | Use another device or browser profile |
 | A phone plays but is never paid | Its wallet has no gas, so its moves went in unsigned. The server logs `[drip] giving up` | Check that the drip wallet has MON |
+| "Your MON left the game but did not reach your wallet" | `withdraw` landed and the transfer did not | Tap **Send my MON** again. The phone sends the transfer alone |
 | Everyone is back in the lobby with no names | The server restarted | Join again. Winnings already in the contract are safe |
 | `forge` is not found when you run `npm test` | Foundry is not installed or not on your PATH | Install the Monad build, or run only `cd server && npm test` |
 | `forge build` cannot find `forge-std` | The repo was cloned without submodules | `git submodule update --init` |
@@ -626,6 +658,7 @@ Built at the event, 10 October 2026:
 - New players get gas on joining. The drip wallet funds burner wallets in batches through `dripMany`.
 - Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events. Each phone's balance and each bot's remaining pool are read from the contract too.
 - Played a full test round on testnet: three clues, twelve guesses, and one settle transaction that made 18 payouts.
+- Cash-out on the phone: a player signs `withdraw()` and a transfer, which move their winnings to their own wallet. Tested end to end on a local chain.
 - Gas limits measured under Monad pricing, plus 20%.
 - A deploy script, and one server process that serves the whole app, so one URL is enough. `npm run build` and `npm start` at the repo root are all a host needs.
 
