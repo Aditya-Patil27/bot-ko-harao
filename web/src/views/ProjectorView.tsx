@@ -234,7 +234,8 @@ export function ProjectorView() {
                 </span>
               )}
               {timed && (
-                <div className="flex items-center gap-[1cqw]">
+                // Its own layer: when the timer leaves, no thin line of its shadow stays painted on the stage.
+                <div className="flex items-center gap-[1cqw] will-change-transform">
                   <TimerBar
                     frac={frac}
                     urgent={urgent}
@@ -700,6 +701,13 @@ const CARD_STYLE: Record<RevealCard['kind'], { label: string; rule: string; icon
   obvious: { label: 'Too obvious', rule: 'So easy that a bot got it.', icon: Robot, band: 'bg-chhota' },
 };
 
+// A long clue drops a size, so the lines under it (who got it) stay inside the card.
+function clueSize(text: string) {
+  if (text.length > 28) return 'text-[clamp(1.5rem,2.3cqw,2.9rem)]';
+  if (text.length > 16) return 'text-[clamp(1.7rem,2.7cqw,3.4rem)]';
+  return 'text-[clamp(1.9rem,3.2cqw,4rem)]';
+}
+
 function RevealBoard({ reveal, url }: { reveal: Reveal; url: string }) {
   const kinds: RevealCard['kind'][] = ['beat', 'niche', 'obvious'];
   return (
@@ -724,7 +732,7 @@ function RevealBoard({ reveal, url }: { reveal: Reveal; url: string }) {
               <div className="flex min-h-0 flex-1 flex-col p-[1.4cqw]">
                 {card ? (
                   <>
-                    <p className="display text-[clamp(1.9rem,3.2cqw,4rem)] leading-[1.05] break-words">
+                    <p className={`display leading-[1.05] break-words ${clueSize(card.text)}`}>
                       &ldquo;{card.text}&rdquo;
                     </p>
                     <p className="mt-[1.4vh] text-[clamp(1.1rem,1.6cqw,1.9rem)] leading-tight font-semibold">
