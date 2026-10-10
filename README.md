@@ -24,7 +24,7 @@
 | **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified, exact match, on MonadVision (Monad's Sourcify). |
 | **A round on chain** | [Settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) of a test round on 10 October 2026. One transaction settled three clues and made 18 payouts. |
 | **A cash-out on chain** | [Transfer](https://testnet.monadvision.com/tx/0xb7c45a7f0945af422cc772b165d1bc0ccbd372d9efa95b7ce9e9609ae3a80f6d) from a test on the live site on 10 October 2026. A test browser cashed out 0.03 MON to one of the project's own wallets. |
-| **Demo video** | [The demo on X](https://x.com/AdityaPati74270/status/2108887770030862835), 1 minute 48 seconds. |
+| **Demo video** | [The demo on X, with a voice-over](https://x.com/AdityaPati74270/status/2108896052489461782), 1 minute 28 seconds. [The longer version without one](https://x.com/AdityaPati74270/status/2108887770030862835), 1 minute 48 seconds, is the same recording. |
 | **Product video** | [The ad on X](https://x.com/AdityaPati74270/status/2108882886258819075), 32 seconds. |
 | **Post** | [Build post on X](https://x.com/AdityaPati74270/status/2108824629116887407) |
 
