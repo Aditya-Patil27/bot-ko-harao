@@ -1,0 +1,11 @@
+{
+  "name": "bot-ko-harao",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "cd contracts && forge build && cd ../server && pnpm run --silent test && cd ../web && pnpm run build",
+    "test": "cd contracts && forge test && cd ../server && pnpm run --silent test",
+    "dev:server": "cd server && pnpm dev",
+    "dev:web": "cd web && pnpm dev"
+  }
+}

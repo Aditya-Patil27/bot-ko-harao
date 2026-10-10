@@ -1,0 +1,14 @@
+# Secrets: wallet keys and API keys live here. Never commit.
+.env
+.env.*
+!.env.example
+
+# Dependencies and build output
+node_modules/
+dist/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+
+# Logs
+*.log

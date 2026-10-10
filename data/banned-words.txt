@@ -1,0 +1,76 @@
+# Bot ko Harao — banned words list (§13.4)
+# en / hi / mr — loaded by moderate.ts
+# Not exhaustive. Two layers back it up:
+#   1. Host H-hotkey hides any clue from the projector instantly
+#   2. Only moderated clues appear on the projector at all
+# One word per line, lowercase. Matching is case-insensitive substring.
+
+# English slurs and profanity
+fuck
+shit
+damn
+bitch
+ass
+asshole
+bastard
+dick
+cock
+cunt
+whore
+slut
+nigger
+nigga
+faggot
+retard
+rape
+
+# Hindi / Hinglish profanity
+madarchod
+behenchod
+chutiya
+chutiye
+bhenchod
+bhosdike
+gaandu
+gaand
+randi
+harami
+haramkhor
+saala
+saali
+kamina
+kamine
+kutta
+kutti
+lauda
+lund
+chut
+
+# Marathi profanity
+zavadya
+aai zhavadya
+aaizhavla
+bhadvya
+bhikarchot
+gandu
+gandhavla
+jhaant
+jhat
+randichya
+
+# Communal / casteist — block hard
+dalit
+bhangi
+chamar
+mulla
+katwa
+chinky
+madrasi
+
+# Sexual / explicit
+boobs
+nude
+naked
+porn
+sex
+sexy

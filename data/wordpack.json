@@ -1,0 +1,54 @@
+{
+  "_meta": {
+    "version": "0.1.0",
+    "date": "2026-10-08",
+    "note": "Bot ko Harao word pack — §13.1. All four items in a group must be equally famous to the room. Pre-test in AI Studio and Groq Playground before the event.",
+    "mix": "40% Pune-local · 25% Bollywood/cricket/culture · 15% college/office/Hinglish · 10% crypto/hackathon · 10% blank (venue, fill on the day)"
+  },
+  "groups": [
+    { "id": 1,  "theme": "Pune breakfast",          "items": ["misal", "poha", "sabudana khichdi", "vada pav"] },
+    { "id": 2,  "theme": "Pune landmarks",          "items": ["Shaniwar Wada", "Sinhagad", "Aga Khan Palace", "Dagdusheth"] },
+    { "id": 3,  "theme": "Pune peths",              "items": ["Sadashiv Peth", "Narayan Peth", "Shukrawar Peth", "Kasba Peth"] },
+    { "id": 4,  "theme": "Pune colleges",           "items": ["COEP", "Fergusson", "Symbiosis", "MIT Pune"] },
+    { "id": 5,  "theme": "Pune IT hubs",            "items": ["Hinjewadi", "Kharadi", "Magarpatta", "Baner"] },
+    { "id": 6,  "theme": "Pune traffic jams",       "items": ["Swargate", "Chandni Chowk", "University Road", "Katraj"] },
+    { "id": 7,  "theme": "Pune street snacks",      "items": ["kothimbir vadi", "thalipeeth", "mastani", "bhakarwadi"] },
+    { "id": 8,  "theme": "Pune iconic eateries",    "items": ["Vaishali", "Goodluck", "Kayani Bakery", "Chitale"] },
+    { "id": 9,  "theme": "Pune hills to trek",      "items": ["Vetal Tekdi", "Parvati Hill", "Taljai", "ARAI Tekdi"] },
+    { "id": 10, "theme": "Pune festivals",          "items": ["Ganesh Chaturthi", "Sawai Gandharva", "NH7 Weekender", "Pune Festival"] },
+    { "id": 11, "theme": "Pune shopping streets",   "items": ["FC Road", "MG Road", "Laxmi Road", "JM Road"] },
+    { "id": 12, "theme": "Pune localities",          "items": ["Kothrud", "Deccan", "Aundh", "Wakad"] },
+    { "id": 13, "theme": "Pune transport",           "items": ["PMPML bus", "auto-rickshaw", "Pune metro", "shared tempo"] },
+    { "id": 14, "theme": "Pune complaints",          "items": ["potholes", "traffic", "construction", "parking"] },
+    { "id": 15, "theme": "Pune rivers and dams",     "items": ["Mula river", "Mutha river", "Pavana dam", "Khadakwasla"] },
+    { "id": 16, "theme": "Marathi movies",           "items": ["Sairat", "Natsamrat", "Timepass", "Lai Bhaari"] },
+
+    { "id": 17, "theme": "IPL teams",               "items": ["Mumbai Indians", "CSK", "RCB", "KKR"] },
+    { "id": 18, "theme": "Bollywood Khans",          "items": ["Shah Rukh", "Aamir", "Salman", "Saif"] },
+    { "id": 19, "theme": "Iconic Bollywood lines",   "items": ["Mogambo khush hua", "Kitne aadmi the", "Picture abhi baaki hai", "Rahul naam toh suna hoga"] },
+    { "id": 20, "theme": "Cricket legends",          "items": ["Sachin", "Dhoni", "Kohli", "Rohit"] },
+    { "id": 21, "theme": "Indian TV shows",          "items": ["Taarak Mehta", "CID", "Kapil Sharma Show", "Bigg Boss"] },
+    { "id": 22, "theme": "Indian ad brands",         "items": ["Amul", "Fevicol", "Cadbury", "Maggi"] },
+    { "id": 23, "theme": "Party Bollywood songs",    "items": ["Chaiyya Chaiyya", "Kajra Re", "Lungi Dance", "Kala Chashma"] },
+    { "id": 24, "theme": "Indian food apps",         "items": ["Zomato", "Swiggy", "Blinkit", "Zepto"] },
+    { "id": 25, "theme": "Indian payment apps",      "items": ["PhonePe", "Google Pay", "Paytm", "CRED"] },
+    { "id": 26, "theme": "Cricket dismissals",       "items": ["bowled", "caught", "LBW", "run out"] },
+
+    { "id": 27, "theme": "Office meeting clichés",   "items": ["Let's take this offline", "As per my last email", "Will revert", "Please do the needful"] },
+    { "id": 28, "theme": "College survival kit",     "items": ["canteen", "proxy attendance", "last bench", "ATKT"] },
+    { "id": 29, "theme": "Startup buzzwords",        "items": ["pivot", "disrupt", "runway", "scale"] },
+    { "id": 30, "theme": "Hinglish slang",           "items": ["jugaad", "timepass", "chill maar", "fundoo"] },
+    { "id": 31, "theme": "Indian IT companies",      "items": ["TCS", "Infosys", "Wipro", "HCL"] },
+    { "id": 32, "theme": "Dev excuses",              "items": ["works on my machine", "it was like that before", "LGTM", "ship it"] },
+
+    { "id": 33, "theme": "Blockchain basics",        "items": ["gas", "nonce", "block", "hash"] },
+    { "id": 34, "theme": "DeFi moves",               "items": ["swap", "liquidity pool", "yield farming", "airdrop"] },
+    { "id": 35, "theme": "Hackathon essentials",     "items": ["energy drink", "all-nighter", "demo day", "free swag"] },
+    { "id": 36, "theme": "Web3 wallets",             "items": ["MetaMask", "Phantom", "Rainbow", "Rabby"] },
+
+    { "id": 37, "theme": "VENUE — fill on the day",  "items": ["___", "___", "___", "___"] },
+    { "id": 38, "theme": "VENUE — fill on the day",  "items": ["___", "___", "___", "___"] },
+    { "id": 39, "theme": "VENUE — fill on the day",  "items": ["___", "___", "___", "___"] },
+    { "id": 40, "theme": "VENUE — fill on the day",  "items": ["___", "___", "___", "___"] }
+  ]
+}
