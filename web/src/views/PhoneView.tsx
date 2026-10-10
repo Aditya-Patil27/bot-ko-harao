@@ -754,9 +754,9 @@ function cashError(reason?: unknown) {
   return 'Could not cash out. Try again.';
 }
 
-// FIELD for a 42-character address: monospace and small enough to show most of it.
+// FIELD for a 42-character address: monospace, and 16px so an iPhone does not zoom the page when the field is tapped.
 const ADDRESS_FIELD =
-  'h-14 w-full rounded-2xl border-[3px] border-ink bg-card px-3 font-mono text-sm font-bold text-ink transition-[translate,box-shadow] duration-150 placeholder:font-medium placeholder:text-ink-dim focus:-translate-y-0.5 focus:shadow-hard';
+  'h-14 w-full rounded-2xl border-[3px] border-ink bg-card px-3 font-mono text-base font-bold text-ink transition-[translate,box-shadow] duration-150 placeholder:font-medium placeholder:text-ink-dim focus:-translate-y-0.5 focus:shadow-hard';
 
 // Winnings are held by the contract under this phone's burner. Cashing out is two
 // transactions signed here: withdraw() on the contract, then a transfer to the
