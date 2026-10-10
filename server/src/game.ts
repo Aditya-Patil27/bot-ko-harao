@@ -30,6 +30,16 @@ export interface SlotData {
   endsAt: number;
 }
 
+// Spreads a round's clues over at most `max` guess slots, as evenly as it can.
+// No slot is ever empty: an empty one is a blank big screen for a whole slot.
+export function splitClues<T>(clues: T[], max: number): T[][] {
+  const rest = [...clues];
+  const count = Math.min(max, rest.length);
+  const out: T[][] = [];
+  for (let i = 0; i < count; i++) out.push(rest.splice(0, Math.ceil(rest.length / (count - i))));
+  return out;
+}
+
 export class GameState extends EventEmitter {
   phase: Phase = 'LOBBY';
   round = 0;
@@ -107,21 +117,12 @@ export class GameState extends EventEmitter {
   }
 
   private buildSlots(): void {
-    const clues = [...this.clues];
-    const slotCount = Math.min(config.slots, clues.length);
-    if (slotCount === 0) {
+    const groups = splitClues(this.clues, config.slots);
+    if (groups.length === 0) {
       this.setPhase('LOBBY', 0);
       return;
     }
-    const perSlot = Math.ceil(clues.length / slotCount);
-    this.slots = [];
-    for (let i = 0; i < slotCount; i++) {
-      this.slots.push({
-        index: i,
-        clues: clues.splice(0, perSlot),
-        endsAt: 0,
-      });
-    }
+    this.slots = groups.map((clues, index) => ({ index, clues, endsAt: 0 }));
   }
 
   private startNextSlot(): void {
