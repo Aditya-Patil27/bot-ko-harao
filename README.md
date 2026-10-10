@@ -7,7 +7,7 @@ TODO: screenshot of the big screen in the middle of a round
 | | |
 |---|---|
 | **Play it** | TODO: hosted URL |
-| **Contract** | TODO: address and verified source link (Monad testnet, chain ID 10143) |
+| **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified on Sourcify. |
 | **Demo video** | TODO |
 | **Product video** | TODO |
 | **Post** | TODO |
@@ -56,7 +56,7 @@ Each phone signs its own transactions with its burner wallet. The server forward
 - **`withdraw`** pays a player their winnings. Bots cannot withdraw. The phone app shows winnings but has no withdraw button yet.
 - **`dripMany`** forwards the caller's own MON to a list of addresses, so burner wallets have gas.
 
-R and G are fixed when the contract is deployed. A bot pays only what is left in its pool.
+R and G are fixed when the contract is deployed. On the live contract R is 0.005 MON and G is 0.01 MON. A bot pays only what is left in its pool.
 
 ## Why Monad
 
@@ -148,7 +148,7 @@ Before the event started we had a test build: the contract and its tests, a firs
 
 Built at the event, 10 October 2026:
 
-- Deployed the contract again at the event and verified the source on Sourcify.
+- Deployed the contract the game runs on, at 11:55 IST, and verified the source on Sourcify.
 - Phones sign their own `postClue` and `guess` transactions with the burner wallet. The server checks each one and relays it.
 - New players get gas on joining. The drip wallet funds burner wallets in batches through `dripMany`.
 - Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events. Each phone's balance and each bot's remaining pool are read from the contract too.
