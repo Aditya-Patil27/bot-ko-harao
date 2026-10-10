@@ -10,7 +10,7 @@ TODO: screenshot of the big screen in the middle of a round
 | **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified, exact match, on MonadVision (Monad's Sourcify). |
 | **Demo video** | TODO |
 | **Product video** | TODO |
-| **Post** | TODO |
+| **Post** | [Build post on X](https://x.com/AdityaPati74270/status/2108824629116887407) |
 
 Built at Monad Blitz Pune V3.
 
