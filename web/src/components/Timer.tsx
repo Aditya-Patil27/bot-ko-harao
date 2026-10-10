@@ -32,10 +32,10 @@ export function TimerBar({
   className?: string;
 }) {
   return (
-    <div className={`w-full overflow-hidden rounded-full bg-surface-2 ${className}`} aria-hidden>
+    <div className={`overflow-hidden rounded-full border-[3px] border-ink bg-card ${className}`} aria-hidden>
       <div
-        className={`h-full w-full origin-left rounded-full transition-[transform,background-color] duration-200 ease-linear ${
-          urgent ? 'bg-bot' : 'bg-brand'
+        className={`h-full w-full origin-left transition-[transform,background-color] duration-200 ease-linear ${
+          urgent ? 'bg-chhota' : 'bg-ink'
         }`}
         style={{ transform: `scaleX(${frac})` }}
       />

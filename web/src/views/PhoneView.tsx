@@ -8,7 +8,6 @@ import {
   HandTap,
   Lightning,
   PencilSimple,
-  Robot,
   Television,
   UsersThree,
   WifiSlash,
@@ -16,6 +15,7 @@ import {
 } from '@phosphor-icons/react';
 import { useWs } from '../hooks/useWs';
 import { TimerBar, useCountdown } from '../components/Timer';
+import { BotTile, botOf } from '../components/Bot';
 
 type Phase = 'LOBBY' | 'WRITE' | 'GUESS' | 'REVEAL';
 
@@ -62,10 +62,10 @@ const MAX_WORDS = 6;
 const KEY_SLOT = 'bkh:key';
 const NAME_SLOT = 'bkh:name';
 
-const STEPS: { icon: Icon; title: string; body: string }[] = [
-  { icon: PencilSimple, title: 'Write a clue', body: 'You get a secret word. Hint at it without saying it.' },
-  { icon: HandTap, title: 'Guess fast', body: "Pick the word behind other people's clues." },
-  { icon: Robot, title: 'Beat the bots', body: 'Two AIs guess the same clues. Beat them and you earn.' },
+const STEPS: { title: string; body: string }[] = [
+  { title: 'Write a clue', body: 'You get a secret word. Hint at it without saying it.' },
+  { title: 'Guess fast', body: "Pick the word behind other people's clues." },
+  { title: 'Beat the bots', body: 'Two AIs guess the same clues. Fool them and you win.' },
 ];
 
 function load(key: string): string | null {
@@ -348,44 +348,61 @@ export function PhoneView() {
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pt-[max(env(safe-area-inset-top),8px)] pb-[max(env(safe-area-inset-bottom),16px)]">
-      <header className="flex h-12 shrink-0 items-center justify-between">
-        <span className="text-lg font-extrabold tracking-tight">
-          Bot ko <span className="text-brand">Harao</span>
+      <header className="flex h-14 shrink-0 items-center justify-between gap-3">
+        <span className="display text-2xl leading-none uppercase">
+          Bot ko <span className="cap-box inline-block rounded-md bg-ink px-[0.3em] text-sun [--pad:0.22em]">Harao</span>
         </span>
-        <span className="flex items-center gap-3 text-sm font-bold text-ink-dim">
-          {!connected && (
-            <span className="flex items-center gap-1.5 text-warn" role="status">
-              <WifiSlash size={18} weight="bold" aria-hidden />
+        <span className="flex items-center gap-2 text-sm font-bold">
+          {!connected && playerId && (
+            <span className="flex items-center gap-1.5 rounded-full border-2 border-ink bg-sun px-2.5 py-1" role="status">
+              <WifiSlash size={16} weight="bold" aria-hidden />
               Reconnecting
             </span>
           )}
-          {playerId && round > 0 && <span className="font-mono">Round {round}</span>}
+          {playerId && round > 0 && (
+            <span className="rounded-full bg-ink px-3 py-1.5 font-mono text-xs leading-none text-paper uppercase">
+              Round {round}
+            </span>
+          )}
         </span>
       </header>
 
       {timed && (
         <div className="flex shrink-0 items-center gap-3">
-          <TimerBar frac={frac} urgent={secs <= 5} className="h-2" />
-          <span className={`w-8 text-right font-mono text-base font-bold tabular-nums ${secs <= 5 ? 'text-bot' : ''}`}>
+          <TimerBar frac={frac} urgent={secs <= 5} className="h-4 min-w-0 flex-1" />
+          <span
+            className={`grid h-9 min-w-11 place-items-center rounded-lg border-[3px] border-ink px-1 font-mono text-lg leading-none font-bold tabular-nums ${
+              secs <= 5 ? 'bg-chhota' : 'bg-card'
+            }`}
+          >
             {secs}
           </span>
         </div>
       )}
 
-      <main className="flex flex-1 flex-col pt-6">
+      <main className="flex flex-1 flex-col pt-5">
         {!playerId ? (
           <form onSubmit={onJoin} noValidate className="flex flex-1 flex-col">
             <div className="flex flex-1 flex-col justify-center pb-8">
-              <p lang="hi" className="text-xl font-bold text-brand">
-                बॉट को हराओ
-              </p>
-              <h1 className="mt-1 text-5xl leading-[1.05] font-extrabold">Beat the bot.</h1>
-              <p className="mt-4 text-lg leading-snug text-ink-dim">
+              <div className="relative">
+                <p lang="hi" className="display text-[clamp(4rem,21vw,5.75rem)] leading-[1.12]">
+                  <span className="block">बॉट को</span>
+                  <span className="inline-block -rotate-2 rounded-2xl bg-ink px-[0.14em] pt-[0.48em] pb-[0.05em] leading-[0.7] text-sun">
+                    हराओ
+                  </span>
+                </p>
+                <span className="absolute top-1 right-0 flex flex-col items-end gap-2" aria-hidden>
+                  <BotTile bot="Chhota" className="size-16 rotate-6 shadow-hard-sm" />
+                  <BotTile bot="Bada" className="mr-7 size-20 -rotate-3 shadow-hard-sm" />
+                </span>
+              </div>
+              <h1 className="display mt-4 text-4xl leading-none uppercase">Beat the bot.</h1>
+              <p className="mt-3 text-lg leading-snug text-ink-dim">
                 The whole room plays against two AIs. Write clues your friends get and the bots miss.
               </p>
             </div>
             <div className="space-y-2">
-              <label htmlFor="name" className="block text-sm font-bold text-ink-dim">
+              <label htmlFor="name" className="block text-sm font-bold tracking-wider uppercase">
                 Your name
               </label>
               <input
@@ -399,12 +416,12 @@ export function PhoneView() {
                 placeholder="e.g. Priya"
                 aria-invalid={!!joinErr}
                 aria-describedby="name-note"
-                className="h-14 w-full rounded-2xl border-2 border-line bg-surface px-4 text-lg font-bold text-ink transition-colors duration-150 placeholder:text-ink-dim focus:border-brand"
+                className={FIELD}
               />
               <p
                 id="name-note"
                 role={joinErr ? 'alert' : undefined}
-                className={`min-h-5 text-sm ${joinErr ? 'font-bold text-bot' : 'text-ink-dim'}`}
+                className={`min-h-5 text-sm ${joinErr ? 'font-bold text-danger' : 'text-ink-dim'}`}
               >
                 {joinErr || 'Shown on the big screen.'}
               </p>
@@ -417,28 +434,33 @@ export function PhoneView() {
           deal && deal.round === round ? (
             <section className="flex flex-1 flex-col">
               <Eyebrow>Your word</Eyebrow>
-              <p className="mt-1 animate-rise text-6xl leading-none font-extrabold break-words">
-                {deal.options[deal.mine]}
-              </p>
-              <p className="mt-6 text-sm font-bold text-ink-dim">Not these</p>
+              <div className="mt-3 -rotate-1 animate-rise rounded-3xl border-[3px] border-ink bg-sun px-5 pt-6 pb-1 shadow-hard">
+                <p className="display text-6xl leading-none break-words uppercase">{deal.options[deal.mine]}</p>
+              </div>
+              <p className="mt-6 text-sm font-bold tracking-wider uppercase">Not these</p>
               <ul className="mt-2 flex flex-wrap gap-2">
                 {deal.options
                   .filter((_, i) => i !== deal.mine)
                   .map((o) => (
-                    <li key={o} className="rounded-full border border-line px-3 py-1 text-base font-bold text-ink-dim">
+                    <li
+                      key={o}
+                      className="rounded-full border-2 border-dashed border-ink/50 px-3 pt-1.5 pb-1 text-base leading-tight font-bold text-ink-dim"
+                    >
                       {o}
                     </li>
                   ))}
               </ul>
 
               {lockedClue ? (
-                <div role="status" className="mt-auto animate-rise rounded-2xl border-2 border-win/50 bg-surface p-5">
-                  <p className="flex items-center gap-2 text-lg font-extrabold text-win">
-                    <CheckCircle size={26} weight="fill" aria-hidden />
-                    Clue locked
-                  </p>
-                  <p className="mt-2 text-2xl font-bold break-words">&ldquo;{lockedClue}&rdquo;</p>
-                  <p className="mt-2 text-base text-ink-dim">Guessing starts when the timer runs out.</p>
+                <div className="mt-auto pt-8">
+                  <div role="status" className="animate-stamp rounded-3xl border-[3px] border-ink bg-win p-5 shadow-hard">
+                    <p className="flex items-center gap-2 text-xl leading-tight font-extrabold">
+                      <CheckCircle size={28} weight="fill" aria-hidden />
+                      Clue locked
+                    </p>
+                    <p className="mt-2 text-2xl leading-tight font-bold break-words">&ldquo;{lockedClue}&rdquo;</p>
+                    <p className="mt-2 text-base leading-snug">Guessing starts when the timer runs out.</p>
+                  </div>
                 </div>
               ) : (
                 <ClueForm
@@ -471,10 +493,10 @@ export function PhoneView() {
                   <SlotDots current={slot.slot} total={slot.slots} />
                 </div>
                 <p className="mt-5 text-base font-bold text-ink-dim">Which word is this?</p>
-                <blockquote className="mt-1 animate-rise text-4xl leading-tight font-extrabold break-words">
+                <blockquote className="mt-2 animate-rise rounded-3xl rounded-bl-md border-[3px] border-ink bg-card p-5 text-3xl leading-tight font-extrabold break-words shadow-hard">
                   &ldquo;{slot.text}&rdquo;
                 </blockquote>
-                <div role="group" aria-label="Pick a word" className="mt-auto grid gap-3 pt-8">
+                <div role="group" aria-label="Pick a word" className="mt-auto grid gap-3.5 pt-8 pb-[5px]">
                   {slot.options.map((opt, i) => {
                     const chosen = pick === i;
                     const locked = pick !== null;
@@ -482,18 +504,19 @@ export function PhoneView() {
                       <button
                         key={opt}
                         type="button"
+                        data-key={'ABCD'[i]}
                         onClick={() => onGuess(i)}
                         disabled={locked}
                         aria-pressed={chosen}
-                        className={`flex h-16 w-full cursor-pointer items-center justify-between gap-3 rounded-2xl border-2 px-5 text-left text-xl font-extrabold transition duration-150 active:scale-[0.98] disabled:cursor-default ${
+                        className={`flex h-16 w-full cursor-pointer items-center gap-3 rounded-2xl border-[3px] border-ink px-3 text-left text-xl font-extrabold transition-[translate,box-shadow,background-color,opacity] duration-100 before:grid before:size-9 before:shrink-0 before:place-items-center before:rounded-lg before:border-2 before:border-current before:font-mono before:text-base before:content-[attr(data-key)] disabled:cursor-default ${
                           chosen
-                            ? 'border-brand bg-brand-strong text-white'
+                            ? 'translate-y-[5px] bg-ink text-sun'
                             : locked
-                              ? 'border-line bg-surface text-ink-dim opacity-50'
-                              : 'border-line bg-surface-2 text-ink hover:border-brand'
+                              ? 'translate-y-[5px] bg-card text-ink-dim opacity-45'
+                              : 'bg-card text-ink shadow-key active:translate-y-[5px] active:shadow-none'
                         }`}
                       >
-                        <span className="truncate">{opt}</span>
+                        <span className="text-mid min-w-0 flex-1 truncate">{opt}</span>
                         {chosen && <Check size={26} weight="bold" className="shrink-0 animate-pop" aria-hidden />}
                       </button>
                     );
@@ -501,7 +524,7 @@ export function PhoneView() {
                 </div>
                 <p
                   aria-live="polite"
-                  className={`mt-3 min-h-6 text-center text-base font-bold ${guessErr ? 'text-bot' : 'text-ink-dim'}`}
+                  className={`mt-3 min-h-6 text-center text-base font-bold ${guessErr ? 'text-danger' : 'text-ink-dim'}`}
                 >
                   {guessErr || (pick !== null ? 'Locked in. Next clue soon.' : '')}
                 </p>
@@ -522,20 +545,26 @@ export function PhoneView() {
           ) : (
             <Waiting icon={Television} title="Eyes on the big screen" body="See which clues beat the bots." />
           )
+        ) : result ? (
+          // Back in the lobby: the result stays until the next round starts.
+          <ResultCard round={round} result={result} next />
         ) : (
           <Lobby name={name} round={round} />
         )}
       </main>
 
       {stat && (
-        <footer className="flex shrink-0 items-center justify-center gap-1.5 pt-4 font-mono text-xs text-ink-dim">
-          <Lightning size={14} weight="fill" className="text-brand" aria-hidden />
+        <footer className="mx-auto mt-4 flex shrink-0 items-center gap-2 rounded-full bg-ink px-3.5 py-2 font-mono text-xs leading-none font-bold text-paper">
+          <Lightning size={14} weight="fill" className="text-chain" aria-hidden />
           {stat.ms.toLocaleString('en-US')} ms · block {stat.block.toLocaleString('en-US')}
         </footer>
       )}
     </div>
   );
 }
+
+const FIELD =
+  'h-14 w-full rounded-2xl border-[3px] border-ink bg-card px-4 pt-1 text-lg font-bold text-ink transition-[translate,box-shadow] duration-150 placeholder:font-medium placeholder:text-ink-dim focus:-translate-y-0.5 focus:shadow-hard';
 
 function ClueForm({
   value,
@@ -555,10 +584,10 @@ function ClueForm({
   return (
     <form onSubmit={onSubmit} noValidate className="mt-auto space-y-2 pt-8">
       <div className="flex items-baseline justify-between">
-        <label htmlFor="clue" className="text-sm font-bold text-ink-dim">
+        <label htmlFor="clue" className="text-sm font-bold tracking-wider uppercase">
           Your clue
         </label>
-        <span className={`font-mono text-sm tabular-nums ${over ? 'font-bold text-bot' : 'text-ink-dim'}`}>
+        <span className={`font-mono text-sm tabular-nums ${over ? 'font-bold text-danger' : 'text-ink-dim'}`}>
           {value.length}/{MAX_CHARS} · {words}/{MAX_WORDS} words
         </span>
       </div>
@@ -573,12 +602,12 @@ function ClueForm({
         placeholder="Hint at it, don't say it"
         aria-invalid={!!error}
         aria-describedby="clue-note"
-        className="h-14 w-full rounded-2xl border-2 border-line bg-surface px-4 text-lg font-bold text-ink transition-colors duration-150 placeholder:text-ink-dim focus:border-brand"
+        className={FIELD}
       />
       <p
         id="clue-note"
         role={error ? 'alert' : undefined}
-        className={`min-h-5 text-sm ${error ? 'font-bold text-bot' : 'text-ink-dim'}`}
+        className={`min-h-5 text-sm ${error ? 'font-bold text-danger' : 'text-ink-dim'}`}
       >
         {error || "Don't use any of the four words."}
       </p>
@@ -592,32 +621,32 @@ function ClueForm({
 function Lobby({ name, round }: { name: string; round: number }) {
   return (
     <section className="flex flex-1 flex-col">
-      <div className="flex animate-rise items-center gap-3 rounded-2xl bg-surface p-4">
-        <CheckCircle size={34} weight="fill" className="shrink-0 text-win" aria-hidden />
+      <div className="flex animate-stamp items-center gap-3 rounded-3xl border-[3px] border-ink bg-win p-4 shadow-hard">
+        <CheckCircle size={38} weight="fill" className="shrink-0" aria-hidden />
         <div className="min-w-0">
-          <p className="truncate text-xl leading-tight font-extrabold">You're in, {name}</p>
-          <p className="text-base text-ink-dim">
+          <p className="truncate text-2xl leading-tight font-extrabold">You're in, {name}</p>
+          <p className="text-base leading-snug">
             {round > 0 ? `Round ${round} is done. Next one soon.` : 'Your name is on the big screen.'}
           </p>
         </div>
       </div>
 
-      <h2 className="mt-8 text-sm font-bold tracking-wider text-ink-dim uppercase">How it works</h2>
-      <ol className="mt-3 space-y-3">
-        {STEPS.map(({ icon: StepIcon, title, body }) => (
-          <li key={title} className="flex gap-4 rounded-2xl border border-line p-4">
-            <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-surface-2 text-brand">
-              <StepIcon size={24} weight="bold" aria-hidden />
+      <h2 className="mt-8 text-sm font-bold tracking-wider uppercase">How it works</h2>
+      <ol className="mt-3 divide-y-[3px] divide-ink rounded-3xl border-[3px] border-ink bg-card">
+        {STEPS.map(({ title, body }, i) => (
+          <li key={title} className="flex items-start gap-4 p-4">
+            <span className="display cap-mid grid size-11 shrink-0 place-items-center rounded-full bg-ink text-2xl leading-none text-sun">
+              {i + 1}
             </span>
             <div>
-              <p className="text-lg leading-tight font-bold">{title}</p>
+              <p className="text-xl leading-tight font-extrabold">{title}</p>
               <p className="mt-0.5 text-base leading-snug text-ink-dim">{body}</p>
             </div>
           </li>
         ))}
       </ol>
 
-      <p className="mt-auto flex items-center justify-center gap-2 pt-8 text-base font-bold text-ink-dim">
+      <p className="mt-auto flex items-center justify-center gap-2 pt-8 text-base font-bold">
         Waiting for the host to start
         <ThinkingDots />
       </p>
@@ -625,29 +654,51 @@ function Lobby({ name, round }: { name: string; round: number }) {
   );
 }
 
-function ResultCard({ round, result }: { round: number; result: Result }) {
+function ResultCard({ round, result, next = false }: { round: number; result: Result; next?: boolean }) {
   const payouts = result.payouts ?? [];
   return (
     <section className="flex flex-1 flex-col">
       <Eyebrow>Round {round} results</Eyebrow>
       {payouts.length > 0 ? (
-        <ul className="mt-4 space-y-2">
-          {payouts.map((p, i) => (
-            <li key={i} className="flex animate-rise items-center justify-between rounded-2xl bg-surface p-4">
-              <span className="text-lg font-bold">{p.label}</span>
-              <span className="font-mono text-lg font-bold text-win">+{p.amount}</span>
-            </li>
-          ))}
+        <ul className="mt-4 space-y-2.5">
+          {payouts.map((p, i) => {
+            const bot = botOf(p.label);
+            return (
+              <li
+                key={i}
+                className="flex animate-rise items-center gap-3 rounded-2xl border-[3px] border-ink bg-card py-2.5 pr-4 pl-2.5"
+                style={{ animationDelay: `${i * 70}ms` }}
+              >
+                {bot ? (
+                  <BotTile bot={bot} mood="beaten" className="size-10" />
+                ) : (
+                  <span className="grid size-10 shrink-0 place-items-center rounded-[24%] border-[3px] border-ink bg-sun">
+                    <Check size={20} weight="bold" aria-hidden />
+                  </span>
+                )}
+                <span className="text-mid min-w-0 flex-1 text-lg leading-tight font-bold">{p.label}</span>
+                <span className="font-mono text-lg font-bold text-win-ink tabular-nums">+{p.amount}</span>
+              </li>
+            );
+          })}
         </ul>
       ) : (
-        <p className="mt-4 text-2xl font-extrabold">The bots held on this time.</p>
+        <p className="display mt-4 text-5xl leading-none uppercase">The bots held on this time.</p>
       )}
-      {result.balance && (
-        <div className="mt-auto rounded-2xl border border-line p-4">
-          <p className="text-sm font-bold text-ink-dim">Your balance</p>
-          <p className="font-mono text-3xl font-bold tabular-nums">{result.balance} MON</p>
-        </div>
-      )}
+      <div className="mt-auto space-y-5 pt-8">
+        {result.balance && (
+          <div className="rounded-3xl border-[3px] border-ink bg-win p-5 shadow-hard">
+            <p className="text-base font-bold">Your winnings</p>
+            <p className="font-mono text-4xl font-bold tabular-nums">{result.balance} MON</p>
+          </div>
+        )}
+        {next && (
+          <p className="flex items-center justify-center gap-2 text-base font-bold">
+            Waiting for the next round
+            <ThinkingDots />
+          </p>
+        )}
+      </div>
     </section>
   );
 }
@@ -655,11 +706,11 @@ function ResultCard({ round, result }: { round: number; result: Result }) {
 function Waiting({ icon: WaitIcon, title, body }: { icon: Icon; title: string; body: string }) {
   return (
     <section className="flex flex-1 animate-rise flex-col items-center justify-center pb-12 text-center">
-      <span className="grid size-20 place-items-center rounded-3xl bg-surface text-brand">
-        <WaitIcon size={40} weight="bold" aria-hidden />
+      <span className="grid size-24 -rotate-3 place-items-center rounded-3xl border-[3px] border-ink bg-sun shadow-hard">
+        <WaitIcon size={46} weight="bold" aria-hidden />
       </span>
-      <p className="mt-5 text-3xl font-extrabold">{title}</p>
-      <p className="mt-2 max-w-[28ch] text-lg leading-snug text-ink-dim">{body}</p>
+      <p className="display mt-7 text-4xl leading-none uppercase">{title}</p>
+      <p className="mt-3 max-w-[28ch] text-lg leading-snug text-ink-dim">{body}</p>
     </section>
   );
 }
@@ -670,7 +721,9 @@ function SlotDots({ current, total }: { current: number; total: number }) {
       {Array.from({ length: total }, (_, i) => (
         <span
           key={i}
-          className={`h-2 rounded-full ${i === current ? 'w-6 bg-ink' : i < current ? 'w-2 bg-brand' : 'w-2 bg-surface-2'}`}
+          className={`h-3 rounded-full border-2 border-ink ${
+            i === current ? 'w-7 bg-ink' : i < current ? 'w-3 bg-ink' : 'w-3 bg-card'
+          }`}
         />
       ))}
     </span>
@@ -678,7 +731,11 @@ function SlotDots({ current, total }: { current: number; total: number }) {
 }
 
 function Eyebrow({ children }: { children: ReactNode }) {
-  return <p className="text-sm font-bold tracking-wider text-ink-dim uppercase">{children}</p>;
+  return (
+    <p className="cap-box w-fit rounded-md bg-ink px-2.5 text-xs font-bold tracking-widest text-paper uppercase [--pad:0.6em]">
+      {children}
+    </p>
+  );
 }
 
 function ThinkingDots() {
@@ -691,6 +748,7 @@ function ThinkingDots() {
   );
 }
 
+// A key you press down: the shadow is the key's depth, and pressing or disabling it removes it.
 function PrimaryButton({
   busy,
   children,
@@ -703,10 +761,10 @@ function PrimaryButton({
       {...rest}
       disabled={disabled || busy}
       aria-busy={busy || undefined}
-      className={`flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl bg-brand-strong text-lg font-extrabold text-white transition duration-150 hover:brightness-110 active:scale-[0.98] active:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-45 ${className}`}
+      className={`display mb-[5px] flex h-14 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-[3px] border-ink bg-sun text-2xl leading-none text-ink uppercase shadow-key transition-[translate,box-shadow,background-color] duration-100 active:translate-y-[5px] active:shadow-none disabled:translate-y-[5px] disabled:cursor-not-allowed disabled:bg-sun/40 disabled:text-ink-dim disabled:shadow-none ${className}`}
     >
       {busy && <CircleNotch size={22} weight="bold" className="animate-spin" aria-hidden />}
-      {children}
+      <span className="cap-trim">{children}</span>
     </button>
   );
 }
