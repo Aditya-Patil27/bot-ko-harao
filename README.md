@@ -94,11 +94,11 @@ One process serves the phone app, the big screen and the API.
 - A round needs at least 3 players. The burner wallet lives in the browser's local storage, so each player needs their own device or browser profile.
 - Press **N** on the big screen to start the round.
 
-With the example file as it is, the game runs off chain: the same rounds, with no payouts. The bots have no key yet, so they give no answer and every clue the room gets right counts as beating them. Until step 2 the server log shows an `Invalid API Key` line for each bot call.
+With the example file as it is, the game runs off chain: the same rounds, with no payouts. The bots have no key yet, so they give no answer and every clue the room gets right counts as beating them. The server says at startup which bots have no key.
 
 **2. Turn on the bots**
 
-Put a free Groq key (console.groq.com) in `BOT_CHHOTA_API_KEY` and `BOT_BADA_API_KEY` in `server/.env`, then restart.
+Put a free Groq key (console.groq.com) in `BOT_CHHOTA_API_KEY` and `BOT_BADA_API_KEY` in `server/.env`, then restart. A bot with an empty key is never called, so for a local endpoint that needs no key, put any value there.
 
 **3. Play for MON on testnet**
 
