@@ -527,5 +527,8 @@ server.listen(config.port, () => {
   console.log(`[server] Bot ko Harao running on port ${config.port}`);
   console.log(`[server] Phase: ${game.phase}, Players: ${game.playerCount}`);
   console.log(chainEnabled ? `[server] On chain: contract ${contract}` : '[server] Off chain: CONTRACT_ADDRESS is not set');
+  for (const bot of [config.botChhota, config.botBada]) {
+    if (!bot.apiKey) console.log(`[server] ${bot.name} has no API key and will give no answer`);
+  }
   if (config.demoMode) console.log(`[server] DEMO MODE — shorter timers`);
 });

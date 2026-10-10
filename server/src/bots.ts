@@ -113,6 +113,9 @@ export async function runBot(
       ? { ...config.botChhota, wallet: chhotaWallet }
       : { ...config.botBada, wallet: badaWallet };
 
+  // No key, no call: the bot gives no answer instead of a 401 per clue.
+  if (!botCfg.apiKey) return { name: botCfg.name, answers: [], thinkMs: 0 };
+
   const { answers, thinkMs } = await callLLM(botCfg, slot);
   console.log(
     `[bot:${botCfg.name}] ${answers.length}/${slot.clues.length} answers in ${thinkMs}ms`
