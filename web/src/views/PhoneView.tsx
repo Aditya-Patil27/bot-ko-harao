@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type SubmitEvent, type ReactNode } from 'react';
-import { encodeFunctionData, parseAbi, type Hex } from 'viem';
+import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, type SubmitEvent, type ReactNode, type RefObject } from 'react';
+import { encodeFunctionData, formatEther, isAddress, parseAbi, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import {
   ArrowSquareOut,
@@ -11,6 +11,7 @@ import {
   PencilSimple,
   Television,
   UsersThree,
+  Wallet,
   WifiSlash,
   type Icon,
 } from '@phosphor-icons/react';
@@ -32,7 +33,7 @@ interface Deal {
 interface ChainConfig {
   id: number;
   contract: Hex;
-  gas: { postClue: string; guess: string };
+  gas: { postClue: string; guess: string; withdraw?: string; send?: string };
   maxFeePerGas: string;
   maxPriorityFeePerGas: string;
   nonce: number;
@@ -41,6 +42,7 @@ interface ChainConfig {
 const GAME_ABI = parseAbi([
   'function postClue(uint32 round, uint16 group, bytes32 commit, string text)',
   'function guess(bytes32 clueId, uint8 choice)',
+  'function withdraw()',
 ]);
 
 interface Slot {
@@ -64,6 +66,9 @@ const MAX_CHARS = 40;
 const MAX_WORDS = 6;
 const KEY_SLOT = 'bkh:key';
 const NAME_SLOT = 'bkh:name';
+// MON this burner has withdrawn from the game but not yet sent on to the player's wallet, in wei.
+const OWED_SLOT = 'bkh:owed';
+const PAYTO_SLOT = 'bkh:payto';
 
 const STEPS: { title: string; body: string }[] = [
   { title: 'Write a clue', body: 'You get a secret word. Hint at it without saying it.' },
@@ -348,6 +353,10 @@ export function PhoneView() {
   }
 
   const timed = playerId && phase !== 'LOBBY' && endsAt > 0;
+  const cash =
+    result?.balance && result.balance !== '0' ? (
+      <CashOut account={account} playerId={playerId} chainRef={chainRef} />
+    ) : null;
 
   return (
     <div className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-4 pt-[max(env(safe-area-inset-top),8px)] pb-[max(env(safe-area-inset-bottom),16px)]">
@@ -544,13 +553,17 @@ export function PhoneView() {
           )
         ) : phase === 'REVEAL' ? (
           result ? (
-            <ResultCard round={round} result={result} />
+            <ResultCard round={round} result={result}>
+              {cash}
+            </ResultCard>
           ) : (
             <Waiting icon={Television} title="Eyes on the big screen" body="See which clues beat the bots." />
           )
         ) : result ? (
           // Back in the lobby: the result stays until the next round starts.
-          <ResultCard round={round} result={result} next />
+          <ResultCard round={round} result={result} next>
+            {cash}
+          </ResultCard>
         ) : (
           <Lobby name={name} round={round} />
         )}
@@ -657,7 +670,17 @@ function Lobby({ name, round }: { name: string; round: number }) {
   );
 }
 
-function ResultCard({ round, result, next = false }: { round: number; result: Result; next?: boolean }) {
+function ResultCard({
+  round,
+  result,
+  next = false,
+  children,
+}: {
+  round: number;
+  result: Result;
+  next?: boolean;
+  children?: ReactNode;
+}) {
   const payouts = result.payouts ?? [];
   return (
     <section className="flex flex-1 flex-col">
@@ -706,6 +729,7 @@ function ResultCard({ round, result, next = false }: { round: number; result: Re
             <ArrowSquareOut size={18} weight="bold" aria-hidden />
           </a>
         )}
+        {children}
         {next && (
           <p className="flex items-center justify-center gap-2 text-base font-bold">
             Waiting for the next round
@@ -714,6 +738,171 @@ function ResultCard({ round, result, next = false }: { round: number; result: Re
         )}
       </div>
     </section>
+  );
+}
+
+function toWei(raw: unknown): bigint {
+  return typeof raw === 'string' && /^\d{1,30}$/.test(raw) ? BigInt(raw) : 0n;
+}
+
+function cashError(reason?: unknown) {
+  if (reason === 'bad address') return 'That is not a wallet address. Copy it again from your wallet.';
+  if (reason === 'nothing') return 'Nothing to cash out yet. Win a round first.';
+  if (reason === 'round running') return 'Wait for this round to finish.';
+  if (reason === 'already cashing out') return 'Already sending. Give it a moment.';
+  if (reason === 'not sent') return 'Your MON left the game but did not reach your wallet. Tap again to send it.';
+  return 'Could not cash out. Try again.';
+}
+
+// FIELD for a 42-character address: monospace and small enough to show most of it.
+const ADDRESS_FIELD =
+  'h-14 w-full rounded-2xl border-[3px] border-ink bg-card px-3 font-mono text-sm font-bold text-ink transition-[translate,box-shadow] duration-150 placeholder:font-medium placeholder:text-ink-dim focus:-translate-y-0.5 focus:shadow-hard';
+
+// Winnings are held by the contract under this phone's burner. Cashing out is two
+// transactions signed here: withdraw() on the contract, then a transfer to the
+// wallet the player pastes. The server only relays them.
+function CashOut({
+  account,
+  playerId,
+  chainRef,
+}: {
+  account: PrivateKeyAccount;
+  playerId: string;
+  chainRef: RefObject<ChainConfig | null>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [to, setTo] = useState(() => load(PAYTO_SLOT) ?? '');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const [done, setDone] = useState<{ amount: string; to: string; url?: string } | null>(null);
+
+  async function onSubmit(e: SubmitEvent) {
+    e.preventDefault();
+    const dest = to.trim();
+    if (!isAddress(dest, { strict: false })) return setErr(cashError('bad address'));
+    setBusy(true);
+    setErr('');
+    try {
+      const quote = await postJson('/cashout/quote', { playerId });
+      const chain = readChain(quote.data.chain);
+      if (!quote.ok || !chain || !chain.gas.withdraw || !chain.gas.send) return setErr(cashError(quote.data.error));
+      if (dest.toLowerCase() === chain.contract.toLowerCase()) return setErr(cashError('bad address'));
+      const held = toWei(quote.data.held);
+      const total = held + toWei(load(OWED_SLOT));
+      if (total === 0n) return setErr(cashError('nothing'));
+      save(PAYTO_SLOT, dest);
+
+      let nonce = chain.nonce;
+      const withdrawTx =
+        held > 0n
+          ? await signCall(
+              account,
+              { ...chain, nonce: nonce++ },
+              chain.gas.withdraw,
+              encodeFunctionData({ abi: GAME_ABI, functionName: 'withdraw' }),
+            )
+          : undefined;
+      const sendTx = await account.signTransaction({
+        type: 'eip1559',
+        chainId: chain.id,
+        to: dest,
+        value: total,
+        gas: BigInt(chain.gas.send),
+        nonce,
+        maxFeePerGas: BigInt(chain.maxFeePerGas),
+        maxPriorityFeePerGas: BigInt(chain.maxPriorityFeePerGas),
+      });
+      const { ok, data } = await postJson('/cashout', { playerId, withdrawTx, sendTx });
+      if (chainRef.current && typeof data.nonce === 'number') chainRef.current.nonce = data.nonce;
+      if (!ok) return setErr(cashError(data.error));
+      if (data.sent) {
+        save(OWED_SLOT, '0');
+        setDone({ amount: formatEther(total), to: dest, url: typeof data.txUrl === 'string' ? data.txUrl : undefined });
+        setOpen(false);
+      } else {
+        // Out of the contract but not in their wallet yet: the next tap sends it.
+        if (data.withdrawn) save(OWED_SLOT, total.toString());
+        setErr(cashError('not sent'));
+      }
+    } catch {
+      setErr(cashError());
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  if (done) {
+    return (
+      <div role="status" className="animate-rise rounded-3xl border-[3px] border-ink bg-card p-4">
+        <p className="flex items-center gap-2 text-lg leading-tight font-extrabold">
+          <CheckCircle size={24} weight="fill" aria-hidden />
+          Sent {done.amount} MON to your wallet
+        </p>
+        <p className="mt-1 font-mono text-sm text-ink-dim">
+          {done.to.slice(0, 6)}…{done.to.slice(-4)}
+        </p>
+        {done.url?.startsWith('https://') && (
+          <a
+            href={done.url}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2 flex items-center gap-1.5 text-base font-bold underline underline-offset-4"
+          >
+            See it arrive
+            <ArrowSquareOut size={18} weight="bold" aria-hidden />
+          </a>
+        )}
+      </div>
+    );
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="flex h-12 w-full cursor-pointer items-center justify-center gap-2 rounded-2xl border-[3px] border-ink bg-card text-lg font-extrabold"
+      >
+        <Wallet size={22} weight="bold" aria-hidden />
+        Cash out to my wallet
+      </button>
+    );
+  }
+
+  return (
+    <form onSubmit={onSubmit} noValidate className="space-y-2">
+      <label htmlFor="payto" className="block text-sm font-bold tracking-wider uppercase">
+        Your wallet address
+      </label>
+      <input
+        id="payto"
+        value={to}
+        onChange={(e) => {
+          setTo(e.target.value);
+          if (err) setErr('');
+        }}
+        maxLength={42}
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        enterKeyHint="send"
+        placeholder="0x…"
+        aria-invalid={!!err}
+        aria-describedby="payto-note"
+        className={ADDRESS_FIELD}
+      />
+      <p
+        id="payto-note"
+        role={err ? 'alert' : undefined}
+        className={`min-h-5 text-sm ${err ? 'font-bold text-danger' : 'text-ink-dim'}`}
+      >
+        {err || 'Paste it from MetaMask. Your winnings go there on Monad testnet.'}
+      </p>
+      <PrimaryButton type="submit" busy={busy} disabled={!to.trim()}>
+        Send my MON
+      </PrimaryButton>
+    </form>
   );
 }
 

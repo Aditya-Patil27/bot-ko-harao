@@ -13,6 +13,7 @@ import { initWs, onIdentify, broadcastToAll, broadcastToProjector, sendToPlayer 
 import {
   abi,
   badaWallet,
+  CASHOUT_GAS,
   chainEnabled,
   chhotaWallet,
   clueOnChain,
@@ -28,7 +29,7 @@ import {
   sendSettle,
   waitLanded,
 } from './chain.js';
-import { checkRawTx } from './relay.js';
+import { checkRawTx, checkSendTx } from './relay.js';
 import { queueDrip } from './drip.js';
 import {
   beatTheBots,
@@ -116,7 +117,12 @@ async function chainInfo(address: Address) {
     return {
       id: config.chainId,
       contract,
-      gas: { postClue: PHONE_GAS.postClue.toString(), guess: PHONE_GAS.guess.toString() },
+      gas: {
+        postClue: PHONE_GAS.postClue.toString(),
+        guess: PHONE_GAS.guess.toString(),
+        withdraw: CASHOUT_GAS.withdraw.toString(),
+        send: CASHOUT_GAS.send.toString(),
+      },
       maxFeePerGas: fees.maxFeePerGas.toString(),
       maxPriorityFeePerGas: fees.maxPriorityFeePerGas.toString(),
       nonce,
@@ -132,11 +138,11 @@ async function chainInfo(address: Address) {
 async function relay(serialized: Hex, signer: Address, txNonce: number) {
   try {
     const sent = await track(relayRaw(serialized));
-    return { landed: sent.ok, block: sent.block, nonce: txNonce + 1 };
+    return { landed: sent.ok, block: sent.block, nonce: txNonce + 1, hash: sent.hash as Hex | undefined };
   } catch (e: any) {
     console.error(`[relay] ${signer}: ${e?.shortMessage ?? e?.message ?? e}`);
     const nonce = await getTxCount(signer).catch(() => txNonce);
-    return { landed: false, block: 0, nonce };
+    return { landed: false, block: 0, nonce, hash: undefined };
   }
 }
 
@@ -339,6 +345,96 @@ app.post('/guess', async (req, res) => {
   const stat = sent.landed ? { ms, block: sent.block } : {};
   broadcastToProjector('guess', { clueId: clue.clueId, who: player.name, ...stat });
   res.json({ ok: true, nonce: sent.nonce, ...stat });
+});
+
+// --- Cash-out ---
+
+// Winnings sit in the contract under the phone's burner. A cash-out is the burner's
+// own withdraw() and then its own transfer to the wallet the player typed. The
+// server relays both and never holds the money.
+const cashingOut = new Set<string>();
+// A burner sits under Monad's 10 MON reserve, so its transfer only succeeds if it
+// sent nothing in the previous 3 blocks: wait after the withdraw.
+const RESERVE_GAP_MS = 2000;
+
+// What the contract holds for this player, and what their phone needs to sign with.
+app.post('/cashout/quote', async (req, res) => {
+  const { playerId } = req.body;
+  const player = typeof playerId === 'string' ? game.players.get(playerId) : undefined;
+  if (!player) return res.status(400).json({ error: 'unknown player' });
+  if (!chainEnabled) return res.status(400).json({ error: 'off chain' });
+  try {
+    const address = player.address as Address;
+    const [held, chain] = await Promise.all([getGameBalance(address), chainInfo(address)]);
+    if (!chain) return res.status(502).json({ error: 'chain unavailable' });
+    res.json({ held: held.toString(), chain });
+  } catch (e) {
+    console.error('[cashout] quote failed:', e);
+    res.status(502).json({ error: 'chain unavailable' });
+  }
+});
+
+// `withdrawTx` pulls the winnings out of the contract, `sendTx` moves them on. A
+// phone whose withdraw landed but whose transfer did not sends the transfer alone.
+app.post('/cashout', async (req, res) => {
+  const { playerId, withdrawTx, sendTx } = req.body;
+  const player = typeof playerId === 'string' ? game.players.get(playerId) : undefined;
+  if (!player) return res.status(400).json({ error: 'unknown player' });
+  if (!chainEnabled) return res.status(400).json({ error: 'off chain' });
+  // A round's clue and guesses need the burner's nonce to themselves.
+  if (game.phase === 'WRITE' || game.phase === 'GUESS') return res.status(400).json({ error: 'round running' });
+  if (withdrawTx === undefined && sendTx === undefined) return res.status(400).json({ error: 'nothing to send' });
+  const from = player.address as Address;
+  if (cashingOut.has(from)) return res.status(409).json({ error: 'already cashing out' });
+
+  // Both are checked before either is sent.
+  const withdraw =
+    withdrawTx === undefined
+      ? null
+      : await checkRawTx(withdrawTx, {
+          from,
+          to: contract,
+          chainId: config.chainId,
+          data: encodeFunctionData({ abi, functionName: 'withdraw' }),
+          maxGas: CASHOUT_GAS.withdraw,
+        });
+  if (withdraw && !withdraw.ok) return res.status(400).json({ error: withdraw.reason });
+  const send =
+    sendTx === undefined ? null : await checkSendTx(sendTx, { from, chainId: config.chainId, maxGas: CASHOUT_GAS.send });
+  if (send && !send.ok) return res.status(400).json({ error: send.reason });
+
+  cashingOut.add(from);
+  try {
+    let nonce: number | undefined;
+    let withdrawn = false;
+    if (withdraw) {
+      const out = await relay(withdraw.serialized, from, withdraw.nonce);
+      nonce = out.nonce;
+      // A relay that timed out may still have landed; an emptied balance says it did.
+      withdrawn = out.landed || (await getGameBalance(from).catch(() => 1n)) === 0n;
+      if (!withdrawn) return res.status(502).json({ error: 'tx failed', nonce });
+      console.log(`[cashout] ${player.name} withdrew their winnings`);
+    }
+    if (!send) return res.json({ ok: true, withdrawn, sent: false, nonce });
+
+    if (withdrawn) await sleep(RESERVE_GAP_MS);
+    const moved = await relay(send.serialized, from, send.nonce);
+    if (!moved.landed || !moved.hash) {
+      return res.json({ ok: true, withdrawn, sent: false, nonce: moved.nonce });
+    }
+    console.log(`[cashout] ${player.name} sent ${formatEther(send.value)} MON to ${send.to} in block ${moved.block}`);
+    res.json({
+      ok: true,
+      withdrawn,
+      sent: true,
+      nonce: moved.nonce,
+      tx: moved.hash,
+      block: moved.block,
+      ...(config.explorerTxUrl ? { txUrl: config.explorerTxUrl + moved.hash } : {}),
+    });
+  } finally {
+    cashingOut.delete(from);
+  }
 });
 
 // --- Settlement and reveal ---

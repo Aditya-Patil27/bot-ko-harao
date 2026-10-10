@@ -78,6 +78,10 @@ const withMargin = (gas: bigint): bigint => (gas * 12n + 9n) / 10n;
 const GUESS_GAS = withMargin(62_061n);
 // Phones sign their own clue and guess, so they need the limits too.
 export const PHONE_GAS = { postClue: withMargin(84_930n), guess: GUESS_GAS };
+// A cash-out is two phone transactions: withdraw() on the contract, then a plain
+// transfer. Withdraw is eth_estimateGas on testnet (above the gas report's 47,955:
+// it covers the 63/64 rule on the value call) plus 20%; a transfer between wallets is 21,000 exactly.
+export const CASHOUT_GAS = { withdraw: withMargin(50_277n), send: 21_000n };
 // dripMany to fresh addresses measures base + perAddress * n.
 const DRIP_BASE_GAS = 22_514;
 const DRIP_PER_ADDRESS_GAS = 42_656;

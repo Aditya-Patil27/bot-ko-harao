@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { encodeFunctionData, parseAbi, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts';
-import { checkRawTx, type ExpectedTx } from '../src/relay.js';
+import { checkRawTx, checkSendTx, type ExpectedTx } from '../src/relay.js';
 
 const abi = parseAbi(['function guess(bytes32 clueId, uint8 choice)']);
 const CONTRACT = '0x00000000000000000000000000000000000000C0';
@@ -67,5 +67,41 @@ describe('checkRawTx', () => {
     expect(await reason('not hex')).toBe('bad tx');
     expect(await reason('0x02c0')).not.toBe('ok');
     expect(await reason(`0x02${'00'.repeat(2000)}`)).toBe('bad tx');
+  });
+});
+
+describe('checkSendTx', () => {
+  const WALLET = '0x00000000000000000000000000000000000000aa';
+  const rules = { from: player.address, chainId: 10143, maxGas: 21_000n };
+  const transfer = { ...tx, to: WALLET, data: undefined, value: 20_000_000_000_000_000n, gas: 21_000n } as const;
+  const sendReason = async (raw: unknown) => {
+    const check = await checkSendTx(raw, rules);
+    return check.ok ? 'ok' : check.reason;
+  };
+
+  it("accepts the player's own plain transfer and reports where it goes", async () => {
+    const raw = await player.signTransaction(transfer);
+    expect(await checkSendTx(raw, rules)).toEqual({
+      ok: true,
+      serialized: raw,
+      nonce: 3,
+      to: WALLET,
+      value: 20_000_000_000_000_000n,
+    });
+  });
+
+  it('rejects a transfer signed by someone else', async () => {
+    const other = privateKeyToAccount(generatePrivateKey());
+    expect(await sendReason(await other.signTransaction(transfer))).toBe('wrong signer');
+  });
+
+  it('rejects anything that is not a plain transfer of some MON', async () => {
+    const sign = (over: object) => player.signTransaction({ ...transfer, ...over });
+    expect(await sendReason(await sign({ data: guess(1) }))).toBe('data not allowed');
+    expect(await sendReason(await sign({ value: 0n }))).toBe('no value');
+    expect(await sendReason(await sign({ gas: 21_001n }))).toBe('gas limit too high');
+    expect(await sendReason(await sign({ chainId: 1 }))).toBe('wrong chain');
+    expect(await sendReason(await sign({ to: undefined }))).toBe('wrong target');
+    expect(await sendReason(undefined)).toBe('bad tx');
   });
 });
