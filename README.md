@@ -8,6 +8,7 @@ TODO: screenshot of the big screen in the middle of a round
 |---|---|
 | **Play it** | TODO: hosted URL |
 | **Contract** | [`0xe28e2E3eF788CF38dE8623e7173406b4C9673D14`](https://testnet.monadvision.com/address/0xe28e2E3eF788CF38dE8623e7173406b4C9673D14) on Monad testnet (chain ID 10143). Source verified, exact match, on MonadVision (Monad's Sourcify). |
+| **A round on chain** | [Settle transaction](https://testnet.monadvision.com/tx/0x3496a1f38b1aa13a47fb0c71f6ebf3f31cefa95c1d0f2bf6bd9398202303c0d1) of a test round on 10 October 2026. One transaction settled three clues and made 18 payouts. |
 | **Demo video** | TODO |
 | **Product video** | TODO |
 | **Post** | [Build post on X](https://x.com/AdityaPati74270/status/2108824629116887407) |
@@ -71,6 +72,7 @@ R and G are fixed when the contract is deployed. On the live contract R is 0.005
 - The pool pays out only when a person in the room beats that bot.
 - Nobody has to trust the host. Payout sizes are fixed at deploy, and the operator can only submit a result that the contract checks.
 - Planned, not in the contract yet: a cut of each sponsored pool. The first customers are event organisers and sponsors who already hand out prizes by hand.
+- After events: AI companies already pay people who find where their models fail. Anthropic, for example, [pays for jailbreaks of its models](https://www.anthropic.com/news/model-safety-bug-bounty) through HackerOne. This contract is the same deal in small. The money is locked first and moves only when a human provably beats the model. It fits any test where the right answer can be committed before anyone plays.
 
 ## Run it yourself
 
@@ -152,6 +154,7 @@ Built at the event, 10 October 2026:
 - Phones sign their own `postClue` and `guess` transactions with the burner wallet. The server checks each one and relays it.
 - New players get gas on joining. The drip wallet funds burner wallets in batches through `dripMany`.
 - Rounds settle on chain. The server proposes the winners and the contract checks and pays. The reveal cards, the leaderboard and each phone's payout are read from the contract's `Settled` and `Paid` events. Each phone's balance and each bot's remaining pool are read from the contract too.
+- Played a full test round on testnet: three clues, twelve guesses, and one settle transaction that made 18 payouts.
 - Gas limits measured under Monad pricing, plus 20%.
 - A deploy script, and one server process that serves the whole app, so one URL is enough. `npm run build` and `npm start` at the repo root are all a host needs.
 
