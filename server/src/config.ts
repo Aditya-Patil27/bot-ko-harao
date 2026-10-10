@@ -14,6 +14,8 @@ export const config = {
   monadRpcWss: env('MONAD_RPC_WSS', ''),
   chainId: Number(env('CHAIN_ID', '10143')),
   contractAddress: env('CONTRACT_ADDRESS', '') as `0x${string}`,
+  // Where a transaction hash opens in a browser. Empty: the results carry no link.
+  explorerTxUrl: env('EXPLORER_TX_URL', 'https://testnet.monadvision.com/tx/'),
 
   operatorPk: env('OPERATOR_PK', '') as `0x${string}`,
   dripPk: env('DRIP_PK', '') as `0x${string}`,

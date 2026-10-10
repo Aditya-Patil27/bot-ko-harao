@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type ButtonHTMLAttributes, ty
 import { encodeFunctionData, parseAbi, type Hex } from 'viem';
 import { generatePrivateKey, privateKeyToAccount, type PrivateKeyAccount } from 'viem/accounts';
 import {
+  ArrowSquareOut,
   Check,
   CheckCircle,
   CircleNotch,
@@ -54,6 +55,8 @@ interface Slot {
 interface Result {
   payouts?: { label: string; amount: string }[];
   balance?: string;
+  // Explorer page of the transaction that paid this round out.
+  txUrl?: string;
 }
 
 const NAME_RE = /^[A-Za-z0-9 _-]{1,16}$/;
@@ -691,6 +694,17 @@ function ResultCard({ round, result, next = false }: { round: number; result: Re
             <p className="text-base font-bold">Your winnings</p>
             <p className="font-mono text-4xl font-bold tabular-nums">{result.balance} MON</p>
           </div>
+        )}
+        {result.txUrl?.startsWith('https://') && (
+          <a
+            href={result.txUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-center gap-1.5 py-1 text-base font-bold underline underline-offset-4"
+          >
+            See the transaction
+            <ArrowSquareOut size={18} weight="bold" aria-hidden />
+          </a>
         )}
         {next && (
           <p className="flex items-center justify-center gap-2 text-base font-bold">

@@ -45,6 +45,10 @@ interface Reveal {
   leaderboard: { name: string; earned: string }[];
   beatCount: number;
   bots?: { name: string; from: number; to: number }[];
+  // The settle transaction that paid this round out, when the game is on chain.
+  tx?: string;
+  txUrl?: string;
+  block?: number;
 }
 
 interface Stats {
@@ -262,8 +266,10 @@ export function ProjectorView() {
             {(phase === 'REVEAL' || held) && (reveal ? <RevealBoard reveal={reveal} url={url} /> : <Settling />)}
           </main>
 
-          {stats && (
-            <footer className="mx-auto mt-[2vh] flex shrink-0 items-center gap-[0.8em] rounded-full bg-ink px-[1.6em] py-[0.7em] font-mono text-[clamp(0.9rem,1.1cqw,1.25rem)] leading-none font-bold text-paper">
+          {(phase === 'REVEAL' || held) && typeof reveal?.tx === 'string' ? (
+            <ChainProof tx={reveal.tx} block={reveal.block} url={reveal.txUrl} />
+          ) : stats && (
+            <footer className={CHAIN_STRIP}>
               <Lightning size={20} weight="fill" className="text-chain" aria-hidden />
               <span>block {stats.block.toLocaleString('en-US')}</span>
               <span className="text-chain" aria-hidden>
@@ -287,6 +293,38 @@ export function ProjectorView() {
 }
 
 const STAGES: Phase[] = ['WRITE', 'GUESS', 'REVEAL'];
+
+const CHAIN_STRIP =
+  'mx-auto mt-[2vh] flex shrink-0 items-center gap-[0.8em] rounded-full bg-ink px-[1.6em] py-[0.7em] font-mono text-[clamp(0.9rem,1.1cqw,1.25rem)] leading-none font-bold text-paper';
+
+// The transaction that paid the round out. The room reads the short hash; the operator can click it open.
+function ChainProof({ tx, block, url }: { tx: string; block?: number; url?: string }) {
+  const short = `tx ${tx.slice(0, 6)}…${tx.slice(-4)}`;
+  return (
+    <footer className={CHAIN_STRIP}>
+      <Lightning size={20} weight="fill" className="text-chain" aria-hidden />
+      <span>Paid out on Monad</span>
+      {typeof block === 'number' && (
+        <>
+          <span className="text-chain" aria-hidden>
+            ·
+          </span>
+          <span>block {block.toLocaleString('en-US')}</span>
+        </>
+      )}
+      <span className="text-chain" aria-hidden>
+        ·
+      </span>
+      {url?.startsWith('https://') ? (
+        <a href={url} target="_blank" rel="noreferrer" className="underline decoration-chain decoration-2 underline-offset-4">
+          {short}
+        </a>
+      ) : (
+        <span>{short}</span>
+      )}
+    </footer>
+  );
+}
 
 // During a round the bots keep one place: a rail on the right of the stage.
 const STAGE_GRID = 'grid h-full min-h-0 grid-cols-[1fr_clamp(18rem,26cqw,32rem)] gap-[2cqw]';

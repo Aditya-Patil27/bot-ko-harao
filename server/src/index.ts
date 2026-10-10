@@ -354,17 +354,18 @@ interface SettleOutcome {
   payments: Payment[];
   masks: Map<string, number>;
   failed: SettleItem[];
+  txs: { hash: string; block: number }[];
 }
 
 // One transaction per chunk. A chunk that will not go through is retried clue by
 // clue, so one bad item cannot hold back everyone else's payout.
 async function settleOnChain(items: SettleItem[]): Promise<SettleOutcome> {
-  const out: SettleOutcome = { payments: [], masks: new Map(), failed: [] };
+  const out: SettleOutcome = { payments: [], masks: new Map(), failed: [], txs: [] };
 
   const attempt = async (chunk: SettleItem[]): Promise<boolean> => {
     const hash = await sendSettle(chunk);
     const receipt = hash ? await waitLanded(hash) : null;
-    if (receipt?.status !== 'success') {
+    if (!hash || receipt?.status !== 'success') {
       if (operatorWallet) resetNonce(operatorWallet.account.address);
       return false;
     }
@@ -376,6 +377,7 @@ async function settleOnChain(items: SettleItem[]): Promise<SettleOutcome> {
         out.payments.push({ clueId: paidFor, from, to, amount, reason });
       }
     }
+    out.txs.push({ hash, block: Number(receipt.blockNumber) });
     console.log(`[settle] ${chunk.length} clues settled in block ${receipt.blockNumber}`);
     return true;
   };
@@ -415,6 +417,8 @@ async function settleRound(): Promise<void> {
   let payments: Payment[] = [];
   let masks = new Map<string, number>();
   let pools: { name: string; from: number; to: number }[] | undefined;
+  // The round's settle transaction, so the room can open it on the explorer.
+  let proof: { tx: string; block: number; txUrl?: string } | undefined;
   if (chainEnabled) {
     const items = [...carried, ...buildSettlement(clues, guesses, BOT_ADDRESSES)];
     if (items.length) {
@@ -422,6 +426,14 @@ async function settleRound(): Promise<void> {
       const done = await settleOnChain(items);
       payments = done.payments;
       masks = done.masks;
+      const first = done.txs[0];
+      if (first) {
+        proof = {
+          tx: first.hash,
+          block: first.block,
+          ...(config.explorerTxUrl ? { txUrl: config.explorerTxUrl + first.hash } : {}),
+        };
+      }
       // A failed settle is retried with the next round, once.
       const retried = carried;
       carried = done.failed.filter((item) => !retried.includes(item));
@@ -441,6 +453,7 @@ async function settleRound(): Promise<void> {
     leaderboard: leaderboard(earned, nameOf),
     beatCount,
     ...(pools ? { bots: pools } : {}),
+    ...proof,
   });
 
   if (!chainEnabled) return;
@@ -449,6 +462,7 @@ async function settleRound(): Promise<void> {
     sendToPlayer(player.ws, 'result', {
       payouts: payoutLines(payments, address, botName),
       balance: formatEther((heldBefore.get(address) ?? 0n) + (earned.get(address) ?? 0n)),
+      ...proof,
     });
   }
 }
